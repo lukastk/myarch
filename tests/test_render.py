@@ -107,6 +107,15 @@ class RenderTests(unittest.TestCase):
         pocket_files = [path for path in (ROOT / "home").glob("**/*") if path.is_file() and (path.name.startswith("pocket4-") or path.name in {"config-narrow.jsonc.jinja", "style-compact.css", "pocket4.zsh"})]
         self.assertGreaterEqual(len(pocket_files), 10)
 
+    def test_waybar_restart_has_one_serialized_authority(self) -> None:
+        display = (ROOT / "home/.mybin/pocket4-display").read_text()
+        restart = (ROOT / "home/.mybin/restart-bar").read_text()
+        self.assertNotIn("pkill -x waybar", display)
+        self.assertIn('"$HOME/.mybin/restart-bar" --layout', display)
+        self.assertIn("flock 9", restart)
+        self.assertIn('9>&-', restart)
+        self.assertIn("expected one waybar process", restart)
+
     def test_theme_contract(self) -> None:
         keys = None
         for path in sorted((ROOT / "themes").glob("*.toml")):

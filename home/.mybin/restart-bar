@@ -23,29 +23,82 @@
 # the bar and you just want it back.
 set -euo pipefail
 
-# `pkill -x` matches the EXACT process name. Never `pkill -f waybar`, which
-# matches any command line containing the word — including this script's own,
-# and including a caller that invoked it by full path.
-if pgrep -x waybar >/dev/null; then pkill -x waybar; fi
+# Every path that restarts the bar shares this lock. Display rotation and tablet
+# scale can change almost simultaneously; without serialization, each caller can
+# observe no bar during the other's launch window and create a duplicate surface.
+# XDG_RUNTIME_DIR is session-local and is required for a graphical-session action.
+: "${XDG_RUNTIME_DIR:?restart-bar requires XDG_RUNTIME_DIR from the graphical session}"
+LOCK="$XDG_RUNTIME_DIR/myarch-waybar-restart.lock"
+exec 9>"$LOCK"
+flock 9
 
-# Let the compositor reap the surfaces before the replacement asks for its own;
-# starting instantly races the old process's teardown and can leave the new bar
-# with no layer surface, which is the very failure this script exists to undo.
-sleep 0.3
-
-# PER-MACHINE DISPATCH, not a fallback: exactly one of these two is correct on
-# any given box, and which one is decided by whether the launcher exists.
-#
-# pocket4 has its own launcher because it needs two things plain waybar cannot
-# do for itself — pick the single-row or two-row layout from the width the
-# CURRENT transform and tablet-mode scale leave (see pocket4-waybar's
-# `layout_for`), and set the RTMIN band to SIG_IGN before exec (without which a
-# pocket4-ws-watch poke landing during startup kills the bar silently, since the
-# default action for a realtime signal is TERMINATE). Everywhere else — ideapad
-# — plain waybar is the session's own autostart command.
 LAUNCHER="$HOME/.mybin/pocket4-waybar"
-if [ -x "$LAUNCHER" ]; then
-    setsid uwsm app -- "$LAUNCHER" >/dev/null 2>&1 </dev/null &
-else
-    setsid uwsm app -- waybar >/dev/null 2>&1 </dev/null &
+launch=()
+case "$#" in
+    0)
+        if [ -x "$LAUNCHER" ]; then launch=("$LAUNCHER")
+        else launch=(waybar)
+        fi
+        ;;
+    3)
+        if [ "$1" != "--layout" ]; then
+            echo "usage: $0 [--layout <config> <style>]" >&2
+            exit 2
+        fi
+        if [ ! -x "$LAUNCHER" ]; then
+            echo "restart-bar: --layout is valid only with the Pocket 4 launcher" >&2
+            exit 2
+        fi
+        launch=("$LAUNCHER" --layout "$2" "$3")
+        ;;
+    *)
+        echo "usage: $0 [--layout <config> <style>]" >&2
+        exit 2
+        ;;
+esac
+
+# `pkill -x` matches the exact process name. Wait for full teardown rather than
+# sleeping blindly: the replacement must not race surfaces or child processes
+# that still belong to the previous bar.
+if pgrep -x waybar >/dev/null; then
+    pkill -x waybar
+    for _ in $(seq 1 100); do
+        pgrep -x waybar >/dev/null || break
+        sleep 0.05
+    done
+    if pgrep -x waybar >/dev/null; then
+        echo "restart-bar: waybar did not stop within 5 seconds" >&2
+        exit 1
+    fi
 fi
+
+# Give Hyprland a short teardown grace period, then launch through UWSM so the
+# bar remains in the graphical-session scope. Close fd 9 in the child: the parent
+# must retain the lock through surface creation, but Waybar must not inherit it.
+sleep 0.1
+setsid uwsm app -- "${launch[@]}" 9>&- >/dev/null 2>&1 </dev/null &
+
+# Keep the lock until exactly one process has committed a layer surface. This is
+# what makes a second, immediately-following state change safe: it cannot observe
+# the first launch's no-process window and start another bar.
+saw_process=0
+for _ in $(seq 1 100); do
+    mapfile -t pids < <(pgrep -x waybar)
+    if [ "${#pids[@]}" -gt 1 ]; then
+        echo "restart-bar: expected one waybar process, found ${#pids[@]}" >&2
+        exit 1
+    fi
+    if [ "${#pids[@]}" -eq 1 ]; then
+        saw_process=1
+        if hyprctl layers -j 2>/dev/null | jq -e --argjson pid "${pids[0]}" '[.[] | .levels[][] | select(.pid == $pid)] | length > 0' >/dev/null; then
+            exit 0
+        fi
+    elif [ "$saw_process" -eq 1 ]; then
+        echo "restart-bar: waybar exited before creating a layer surface" >&2
+        exit 1
+    fi
+    sleep 0.05
+done
+
+echo "restart-bar: waybar did not create a layer surface within 5 seconds" >&2
+exit 1

@@ -42,18 +42,12 @@ is_landscape() { [ $(( $(cur_transform) % 2 )) -eq 1 ]; }
 # the tablet-mode scale as well as the orientation, and a second copy would drift.
 restart_waybar() {
     local cfg="$1" style="$2"
-    [ -f "$cfg" ] || return 0
-    # `pkill -x` (exact name) — never `pkill -f waybar`, which would also match
-    # the command line of whatever shell is running this script.
-    pkill -x waybar 2>/dev/null || true
-    sleep 0.3
-    # Via pocket4-waybar, NOT `waybar` directly: it is the one place that sets
-    # the RTMIN band to SIG_IGN before exec, without which a pocket4-ws-watch
-    # poke landing during waybar's startup kills it silently and the rotation
-    # leaves you with no bar at all. `--layout` keeps the explicit choice — we
-    # already know the target orientation, and the monitor may not have finished
-    # switching when pocket4-waybar's own probe would read it.
-    setsid uwsm app -- "$HOME/.mybin/pocket4-waybar" --layout "$cfg" "$style" >/dev/null 2>&1 < /dev/null &
+    [ -f "$cfg" ] || { echo "pocket4-display: missing waybar config: $cfg" >&2; return 1; }
+    [ -f "$style" ] || { echo "pocket4-display: missing waybar style: $style" >&2; return 1; }
+    # restart-bar is the single serialized stop/start authority. The explicit
+    # layout keeps the target orientation authoritative while Hyprland settles
+    # the monitor change; the restart command waits for one committed surface.
+    "$HOME/.mybin/restart-bar" --layout "$cfg" "$style"
 }
 
 apply() {

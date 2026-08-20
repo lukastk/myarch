@@ -321,7 +321,10 @@ def capture_menu() -> None:
 
 
 def doctor() -> None:
-    checks = ["hyprctl", "waybar", "wofi", "grim", "slurp", "hyprpicker", "wl-copy", "cliphist", "mako", "sesh", "mydictation-key"]
+    checks = [
+        "hyprctl", "waybar", "wofi", "grim", "slurp", "hyprpicker",
+        "wl-copy", "cliphist", "mako", "flock", "sesh", "mydictation-key",
+    ]
     failed = False
     for command in checks:
         path = shutil.which(command)

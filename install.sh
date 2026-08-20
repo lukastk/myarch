@@ -57,7 +57,7 @@ if [[ $config_only == false ]]; then
     kitty foot xdg-utils
     ttf-jetbrains-mono-nerd noto-fonts noto-fonts-emoji noto-fonts-cjk
     ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols-common otf-font-awesome gsfonts
-    keyd python-jinja jq shellcheck cpio cmake git meson ninja pkgconf glm
+    keyd python-jinja jq shellcheck util-linux cpio cmake git meson ninja pkgconf glm
   )
   sudo pacman -S --noconfirm --needed "${packages[@]}"
 fi

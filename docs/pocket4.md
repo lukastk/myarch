@@ -13,6 +13,8 @@ The GPD Pocket 4 panel is physically portrait (`1600×2560`) and mounted sideway
 
 `pocket4-waybar` derives the layout from logical width, not orientation alone. A row whose minimum width exceeds its layer surface is a correctness failure: Hyprland scales the oversized buffer and visible touch targets no longer correspond to actual hit regions.
 
+`restart-bar` serializes every Waybar stop/start and waits for exactly one committed layer surface. Rotation passes its target layout through that authority; scale changes use the same path. This prevents rapid orientation and tablet-mode changes from creating duplicate bars during the UWSM launch window.
+
 ## Hardware authorities
 
 - `pocket4-display` — orientation, flip, scale; changes monitor and touchscreen transforms together.
