@@ -21,7 +21,20 @@ IGNORED_ROOTS = {".git", "tmp", "research", "__pycache__"}
 
 
 def tracked_files() -> list[Path]:
-    result = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-co", "--exclude-standard"], check=True, text=True, capture_output=True)
+    result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(ROOT),
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+        ],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
     return [ROOT / line for line in result.stdout.splitlines() if line and not any(part in IGNORED_ROOTS for part in Path(line).parts)]
 
 
