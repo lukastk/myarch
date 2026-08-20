@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
-import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,27 +19,18 @@ PATTERNS = {
 IGNORED_ROOTS = {".git", "tmp", "research", "__pycache__"}
 
 
-def tracked_files() -> list[Path]:
-    result = subprocess.run(
-        [
-            "git",
-            "-C",
-            str(ROOT),
-            "ls-files",
-            "--cached",
-            "--others",
-            "--exclude-standard",
-        ],
-        check=True,
-        text=True,
-        capture_output=True,
-    )
-    return [ROOT / line for line in result.stdout.splitlines() if line and not any(part in IGNORED_ROOTS for part in Path(line).parts)]
+def source_files() -> list[Path]:
+    return [
+        path
+        for path in ROOT.rglob("*")
+        if path.is_file()
+        and not any(part in IGNORED_ROOTS for part in path.relative_to(ROOT).parts)
+    ]
 
 
 def main() -> int:
     findings: list[str] = []
-    for path in tracked_files():
+    for path in source_files():
         if not path.is_file():
             continue
         try:

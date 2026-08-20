@@ -116,6 +116,11 @@ class RenderTests(unittest.TestCase):
         self.assertIn('9>&-', restart)
         self.assertIn("expected one waybar process", restart)
 
+    def test_pocket_display_couples_monitor_and_touch_transforms(self) -> None:
+        display = (ROOT / "home/.mybin/pocket4-display").read_text()
+        self.assertRegex(display, r'hyprctl eval "hl\.monitor\(.*transform = \$t')
+        self.assertRegex(display, r'hyprctl eval "hl\.device\(.*transform = \$t')
+
     def test_theme_contract(self) -> None:
         keys = None
         for path in sorted((ROOT / "themes").glob("*.toml")):
