@@ -1,0 +1,62 @@
+#!/bin/bash
+# pause-prompt — ask for a duration, then hand off to `pause` (Super+Shift+P).
+#
+# Runs inside the one-off popup terminal the keybind spawns (app-id
+# `pause-prompt`, floated by a window rule; see hyprland.lua.jinja), so this
+# script owns that window's whole life: prompt, run the pause, show how it went,
+# and close. Nothing is left on screen afterwards.
+#
+# An empty answer takes `pause`'s own default rather than repeating the number
+# here, so there is one source of truth for what "no argument" means.
+#
+# The window vanishes the instant this script exits, so a bad answer would
+# otherwise be an invisible failure — there is nowhere for `pause`'s "invalid
+# duration" to be read. Hence the re-prompt loop: it is the error surface, not
+# a fallback papering over one.
+
+set -uo pipefail
+
+PAUSE=~/.mybin/pause
+
+# Run the pause, then hold the window open on its last line — the elapsed /
+# remaining split when you cut it short, "Timer completed" when it ran out, or
+# an error. Exec'ing `pause` would be tidier, but the window would close the
+# instant it returned and throw that line away.
+#
+# The key that ENDED the pause cannot leak in here and close this immediately:
+# Hyprland's catchall submap consumes it, and `pause` only resets the submap
+# once it is already tearing down. Held open on failure too, for the same
+# reason the prompt loops on bad input — an error nobody can read is no error.
+run_pause() {
+    "$PAUSE" "$@"
+    echo
+    read -rsn1 -p "(any key to close)"
+    exit 0
+}
+
+# Both lines are kept inside the window's 56 columns (see the bind), so nothing
+# wraps and the prompt sits where you expect it.
+echo "Pause the screen — black until a keypress or timeout."
+echo "(empty = 5 min · Ctrl-C or Ctrl-D to cancel)"
+echo
+
+while true; do
+    # Ctrl-D gives EOF (non-zero read) → cancel, leaving the screen alone.
+    if ! read -r -p "Minutes: " minutes; then
+        echo
+        exit 0
+    fi
+
+    if [[ -z "$minutes" ]]; then
+        run_pause
+    fi
+
+    # The same test `pause` applies, so nothing invalid ever reaches it: a
+    # positive number of minutes, fractions allowed (0.5 = 30s).
+    if [[ "$minutes" =~ ^[0-9]*\.?[0-9]+$ ]] \
+        && awk -v m="$minutes" 'BEGIN {exit !(m * 60 >= 1)}'; then
+        run_pause "$minutes"
+    fi
+
+    echo "  not a positive number of minutes — try 5, 0.5, 90"
+done

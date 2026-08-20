@@ -1,0 +1,648 @@
+#!/bin/bash
+# display-mode — switch between monitor layouts on the Hyprland machines
+# (pocket4, ideapad).
+#
+#   display-mode                 show the current mode and every output
+#   display-mode extend          all outputs on, side by side (the config default)
+#   display-mode external        internal panel OFF, externals only
+#   display-mode internal        externals OFF, internal panel only
+#   display-mode mirror          externals MIRROR the internal panel (presentations)
+#   display-mode cycle           step to the next layout (Super+O)
+#   display-mode mirror-toggle   mirror on/off over the current layout (Super+Shift+O)
+#   display-mode get             print just the mode name, for scripting/waybar
+#
+# WHY THIS EXISTS — two unrelated problems that one mechanism solves:
+#
+#  - GAMES. A Wine/Proton game under XWayland picks its fullscreen rectangle out
+#    of the RandR layout, and with two outputs it can pick one that is not the
+#    output Hyprland actually displays it on. The pointer then does nothing at
+#    all over one monitor and lands badly offset on the other. pocket4 makes
+#    this far more likely than a normal laptop does, because eDP-1 is both
+#    ROTATED (transform 3) and FRACTIONALLY SCALED (1.6): XWayland reports its
+#    screen rect (1600x1000) transposed against its current video mode
+#    (1000x1600), and offers no landscape mode matching that rect at all (the
+#    largest is 960x600). Measured in `external` mode the whole ambiguity is
+#    gone — XWayland reports one output, "1920x1080+0+0", rect and mode
+#    identical — which is why a game launched before the monitor is plugged in
+#    works fine and one launched after does not.
+#  - POINTER ESCAPE. With two outputs the cursor walks off the edge of a
+#    fullscreen game onto the other screen mid-fight. One output, nowhere to go.
+#
+# MIRROR IS FOR PRESENTATIONS, NOT FOR GAMES. A mirrored output is still its own
+# monitor object to Hyprland (it keeps a full entry, with mirrorOf set), so
+# XWayland still sees two outputs and the game problem stands. Use `external` or
+# `internal` for gaming.
+#
+# MIRROR IS AN OVERLAY, NOT A FOURTH LAYOUT, and that is why it is not in the
+# cycle. You drop into it to present and come straight back out to whatever you
+# were doing, so `mirror-toggle` records the layout it covered and returns
+# there, and `cycle` steps on from that covered layout rather than from mirror.
+#
+# ---------------------------------------------------------------------------
+# SIX TRAPS THIS SCRIPT EXISTS TO ENCAPSULATE. Every one fails SILENTLY WITH A
+# SUCCESS EXIT CODE, which is what makes them worth writing down rather than
+# rediscovering. Each is also commented at the site that handles it:
+#
+#  1. `hyprctl keyword` DOES NOT WORK on these machines. The config is Lua, and
+#     hyprctl answers "keyword can't work with non-legacy parsers. Use eval."
+#     Monitor changes therefore go through `hyprctl eval` with a Lua expression,
+#     as pocket4-display also documents.
+#  2. CONFIG vs DISPATCHER need DIFFERENT hyprctl verbs. `hl.monitor(...)` is a
+#     config call and takes `eval`. But `hl.dsp.*` merely CONSTRUCTS a
+#     dispatcher object — evaluating one does nothing at all, and still answers
+#     "ok". Dispatchers must go through `hyprctl dispatch`. That is the whole
+#     reason `apply` and `dispatch_lua` are separate helpers below.
+#  3. A KEY OMITTED FROM A MONITOR RULE KEEPS THE PREVIOUS RULE'S VALUE. So
+#     re-declaring an output without `disabled = false` leaves a panel we turned
+#     off still off, and without `mirror = ""` leaves it still mirroring —
+#     "ok" both times, nothing on screen changing. Every rule here states both.
+#  4. RE-DECLARING A MONITOR RESHUFFLES WORKSPACES ONTO IT. Hence: snapshot
+#     before touching any rule, restore after touching all of them, and bring
+#     externals up BEFORE the panel so the panel's restore is the final word.
+#  5. CLEARING `mirror` DOES NOT RE-ADVERTISE THE OUTPUT. The picture
+#     un-mirrors, but layer-shell clients never re-attach — the external comes
+#     back with no bar and no wallpaper, and restarting them does not help.
+#     Only a full disable→enable re-creates the wl_output global.
+#  6. FOCUSING A WORKSPACE THAT NO LONGER EXISTS CREATES IT ON WHICHEVER MONITOR
+#     HAS FOCUS. Only workspaces 1–9 are persistent here (see hyprland.lua), so
+#     the external's empty one is destroyed on every layout change; focus its
+#     monitor first, or it is reborn on the wrong screen one id higher — 10, 11,
+#     12… — forever.
+#
+# And one that is not Hyprland's fault: WAYBAR DOES NOT SURVIVE ITS OUTPUT BEING
+# REMOVED. The process lives on with no surfaces at all, so the bar has to be
+# bounced after every layout change — see restart_bar.
+#
+# THE MODE IS DERIVED, NEVER STORED. It is read back off the live monitor state
+# on every call, so it cannot drift from reality after a `hyprctl reload`, a
+# cable being pulled, or pocket4-display rotating the panel. The state files
+# hold only what cannot be read back once a monitor is off: the extend-mode
+# layout, the workspace→monitor map, and where focus was.
+
+set -euo pipefail
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/myarch"
+# The extend-mode layout: one "<name> <x> <y> <scale> <transform>" per output,
+# captured whenever we are in extend and about to leave it. Positions have to be
+# restored EXPLICITLY: `position = "auto"` assigns in the order outputs come up,
+# so re-enabling the panel after external mode put it to the RIGHT of the
+# external rather than back where it was, silently reversing which way the
+# pointer crosses between screens. Scale/transform are in here for the same
+# reason — they cannot be read back off a disabled monitor, and guessing wrong
+# leaves pocket4's panel sideways with its touchscreen mapped to the old
+# orientation.
+LAYOUT_FILE="$STATE_DIR/display-mode.layout"
+# The full workspace→monitor map, "<ws> <monitor>" per line. Hyprland evacuates
+# a disabled monitor's workspaces onto a survivor and does NOT bring them back.
+WS_FILE="$STATE_DIR/display-mode.workspaces"
+# Each monitor's active workspace, "<monitor> <ws>" per line. Restoring these is
+# not a courtesy: an output brought back up invents a fresh workspace for
+# itself, and an empty NON-PERSISTENT one only goes away once it stops being its
+# monitor's active workspace. hyprland.lua makes only 1–9 persistent, so without
+# this the empty workspace on the external was destroyed and reborn one id
+# higher on every single cycle — 10, 11, 12…
+ACTIVE_FILE="$STATE_DIR/display-mode.active"
+# The workspace that had focus overall, so a layout change puts you back where
+# you were instead of on whichever monitor came last in ACTIVE_FILE.
+FOCUS_FILE="$STATE_DIR/display-mode.focus"
+# Which layout mirror was engaged FROM. Mirror is an overlay, so leaving it has
+# to land back on the mode you were in rather than always on extend — you drop
+# into mirror to present and come back out to whatever you were doing.
+BASE_FILE="$STATE_DIR/display-mode.base"
+
+# The order `cycle` steps through. MIRROR IS DELIBERATELY NOT IN IT: it is not a
+# fourth layout on the same axis as the others but an OVERLAY on whichever of
+# them you are in — you drop into it for a presentation and come straight back
+# out to where you were. Super+Shift+O toggles it; Super+O cycles the base.
+MODES=(extend external internal)
+
+usage() {
+    cat >&2 <<'EOF'
+Usage:
+  display-mode                 show the current mode and every output
+  display-mode extend          all outputs on, side by side (the config default)
+  display-mode external        internal panel OFF, externals only
+  display-mode internal        externals OFF, internal panel only
+  display-mode mirror          externals MIRROR the internal panel (presentations)
+  display-mode cycle           step to the next layout (mirror is NOT in the cycle)
+  display-mode mirror-toggle   mirror on/off, returning to the layout it covered
+  display-mode get             print just the mode name
+
+Mirror is an OVERLAY, not a fourth layout: it is toggled on top of whichever of
+extend/external/internal you are in, and toggling off returns you there.
+Cycling while mirrored steps on from the covered layout.
+
+For gaming use `external` or `internal` — a single enabled output. `mirror`
+leaves two outputs visible to XWayland and does NOT fix the game pointer bug.
+EOF
+    exit 2
+}
+
+# --- Session discovery ------------------------------------------------------
+# Lifted from `wallpaper`, and for the same reason: plenty of legitimate shells
+# lack HYPRLAND_INSTANCE_SIGNATURE (an ssh shell has none; a tmux server that
+# outlived a Hyprland restart hands its panes a STALE one), and a keybind's
+# environment is not the only way this gets run. `instances` is the one hyprctl
+# subcommand that does not itself need the signature.
+#
+# Note that hyprctl prints "HYPRLAND_INSTANCE_SIGNATURE not set!" to STDOUT, so
+# getting this wrong is silent: inside a $(...) the message is captured into the
+# variable rather than shown, and the script dies under `set -e` with no output.
+resolve_session() {
+    local live=() sig pid
+    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+
+    if [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] &&
+        [ -S "$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.sock" ]; then
+        return 0
+    fi
+
+    while read -r sig pid; do
+        if [ -d "/proc/$pid" ]; then live+=("$sig"); fi
+    done < <(hyprctl instances | awk '/^instance /{s=$2; sub(/:$/,"",s)} /pid:/{print s, $2}')
+
+    case ${#live[@]} in
+    1) export HYPRLAND_INSTANCE_SIGNATURE="${live[0]}" ;;
+    0)
+        echo "display-mode: no Hyprland instance is running on this machine." >&2
+        exit 1
+        ;;
+    *)
+        echo "display-mode: several Hyprland instances are running — set" >&2
+        echo "  HYPRLAND_INSTANCE_SIGNATURE to pick one:" >&2
+        printf '    %s\n' "${live[@]}" >&2
+        exit 1
+        ;;
+    esac
+}
+
+# --- Output discovery -------------------------------------------------------
+# `monitors all` includes DISABLED outputs; plain `monitors` does not, and we
+# have to be able to see a panel we ourselves turned off in order to turn it
+# back on. Nothing here is hardcoded — pocket4 and ideapad have different
+# panels, and an external may be HDMI, DP or a dock.
+#
+# INTERNAL is decided by connector name, which is how the kernel spells the
+# distinction: eDP (modern laptop panels), LVDS (older), DSI (tablets).
+mons_json() { hyprctl monitors all -j; }
+
+internal_name() {
+    mons_json | jq -r '[.[] | select(.name | test("^(eDP|LVDS|DSI)"; "i"))][0].name // empty'
+}
+
+# Every non-internal output, one per line, whether enabled or not.
+external_names() {
+    mons_json | jq -r '.[] | select(.name | test("^(eDP|LVDS|DSI)"; "i") | not) | .name'
+}
+
+enabled_names() { mons_json | jq -r '.[] | select(.disabled | not) | .name'; }
+
+is_enabled() { enabled_names | grep -qxF "$1"; }
+
+# A monitor is mirroring when its mirrorOf names another output. Hyprland spells
+# "not mirroring" as the string "none" (and the mirrored-from monitor as its id,
+# not its name), so this is a "not none" test rather than an equality test.
+is_mirroring() {
+    [ "$(mons_json | jq -r --arg n "$1" '.[] | select(.name == $n) | .mirrorOf')" != "none" ]
+}
+
+# Output names come from hyprctl, but they are about to be pasted into a Lua
+# expression, so hold them to the character set connector names actually use.
+# This is the same instinct as never interpolating a path into a shell string.
+assert_output_name() {
+    case "$1" in
+    *[!A-Za-z0-9-]* | "")
+        echo "display-mode: refusing to use unexpected output name: $1" >&2
+        exit 1
+        ;;
+    esac
+}
+
+# --- Mode derivation --------------------------------------------------------
+# Read the mode back off reality rather than trusting a file. Note the ordering:
+# mirror is checked before extend, because a mirroring layout also has two
+# outputs enabled and would otherwise read as extend.
+current_mode() {
+    local internal e any_ext_on=0 any_ext_mirroring=0
+    internal=$(internal_name)
+
+    while read -r e; do
+        [ -n "$e" ] || continue
+        if is_enabled "$e"; then
+            any_ext_on=1
+            if is_mirroring "$e"; then any_ext_mirroring=1; fi
+        fi
+    done < <(external_names)
+
+    if [ -z "$internal" ]; then
+        echo "external" # a desktop, or a laptop whose panel the kernel hides
+        return
+    fi
+
+    if is_enabled "$internal"; then
+        if [ "$any_ext_on" = "0" ]; then echo internal
+        elif [ "$any_ext_mirroring" = "1" ]; then echo mirror
+        else echo extend
+        fi
+    else
+        echo external
+    fi
+}
+
+has_external() { [ -n "$(external_names)" ]; }
+
+require_external() {
+    if ! has_external; then
+        echo "display-mode: no external output is connected — '$1' needs one." >&2
+        exit 1
+    fi
+}
+
+# --- The two hyprctl verbs --------------------------------------------------
+# CONFIG calls (hl.monitor) are evaluated. DISPATCHERS (hl.dsp.*) must be
+# dispatched — see trap 2 in the header. Passing a dispatcher to `eval` builds
+# the object, throws it away, and answers "ok".
+apply() { hyprctl eval "$1" >/dev/null; }
+dispatch_lua() { hyprctl dispatch "$1" >/dev/null; }
+
+# --- Saved layout -----------------------------------------------------------
+# Capture the extend layout on the way out of it, so it is always fresh — in
+# particular it captures a rotation pocket4-display applied at runtime, which a
+# `hyprctl reload` would have thrown away.
+remember_layout() {
+    [ "$(current_mode)" = "extend" ] || return 0
+    mkdir -p "$STATE_DIR"
+    mons_json | jq -r '.[] | select(.disabled | not) |
+        "\(.name) \(.x) \(.y) \(.scale) \(.transform)"' > "$LAYOUT_FILE"
+}
+
+# The saved "<x>x<y>" for an output, or "auto" when we have never seen it in
+# extend mode. `auto` is the config's own behaviour for an output Hyprland has
+# not been told where to put, so this is the genuine default rather than a
+# fallback papering over a missing value.
+saved_position() {
+    local name=$1 n x y
+    if [ -f "$LAYOUT_FILE" ]; then
+        while read -r n x y _ _; do
+            if [ "$n" = "$name" ]; then printf '%sx%s\n' "$x" "$y"; return 0; fi
+        done < "$LAYOUT_FILE"
+    fi
+    echo auto
+}
+
+# Scale and transform are only ever needed for the internal panel, and unlike
+# position there IS no sane default for them — restoring pocket4 without
+# transform 3 leaves the panel sideways. Absence is therefore a hard error.
+saved_geometry() {
+    local name=$1 n s t
+    if [ -f "$LAYOUT_FILE" ]; then
+        while read -r n _ _ s t; do
+            if [ "$n" = "$name" ]; then printf '%s %s\n' "$s" "$t"; return 0; fi
+        done < "$LAYOUT_FILE"
+    fi
+    echo "display-mode: no saved scale/transform for $name — cannot restore it safely." >&2
+    echo "  Run 'hyprctl reload' to restore every output from hyprland.lua." >&2
+    exit 1
+}
+
+# --- Workspaces -------------------------------------------------------------
+# Snapshot the workspace layout — but ONLY from extend, which is the one mode
+# where the arrangement is the user's rather than an artefact. In a single-output
+# mode every workspace has collapsed onto the surviving screen; snapshotting that
+# would overwrite the good record with the collapsed one and "restore" the whole
+# row onto the external forever after.
+save_workspaces() {
+    [ "$(current_mode)" = "extend" ] || return 0
+    mkdir -p "$STATE_DIR"
+    hyprctl workspaces -j | jq -r '.[] | "\(.id) \(.monitor)"' | sort -n > "$WS_FILE"
+    hyprctl monitors -j | jq -r '.[] | "\(.name) \(.activeWorkspace.id)"' > "$ACTIVE_FILE"
+    hyprctl activeworkspace -j | jq -r '.id' > "$FOCUS_FILE"
+}
+
+# Hyprland evacuates a disabled monitor's workspaces onto a survivor and does
+# not bring them back, so a round trip through `external` would otherwise leave
+# the whole workspace row piled on one screen.
+#
+# The record is consumed ONLY once the moves are confirmed to have taken. Two
+# separate timing traps had to be handled here, both of which present as the
+# moves being accepted ("ok") and then simply not being true:
+#
+#   - `hl.monitor` returns before the modeset completes, so the panel is not yet
+#     in `monitors all` at all — hence wait_for_enabled.
+#   - Hyprland reports the monitor enabled slightly BEFORE it will hold
+#     workspace assignments on it; a move dispatched in that window is undone as
+#     it finishes bringing the output up — hence the settle wait.
+#
+# So the result is verified rather than assumed, and the record is kept for a
+# retry if it did not stick. Re-running `display-mode extend` then just works.
+SETTLE=0.6
+
+wait_for_enabled() {
+    local name=$1 i
+    for i in $(seq 1 40); do
+        if is_enabled "$name"; then return 0; fi
+        sleep 0.1
+    done
+    return 1
+}
+
+# Put every workspace back on the monitor it was on, then restore each
+# monitor's active workspace. Workspaces whose monitor is currently disabled are
+# skipped — in a single-output mode they legitimately live on the survivor, and
+# the record is kept so the next `extend` puts them right.
+#
+# The record is NOT consumed. Unlike the geometry it stays valid across every
+# mode, and re-applying it is idempotent; deleting it would mean a second
+# transition had nothing to work from.
+restore_workspaces() {
+    local ws mon
+    [ -f "$WS_FILE" ] || return 0
+    sleep "$SETTLE"
+
+    while read -r ws mon; do
+        [ -n "$ws" ] || continue
+        if is_enabled "$mon"; then
+            dispatch_lua "hl.dsp.workspace.move({ workspace = \"$ws\", monitor = \"$mon\" })"
+        fi
+    done < "$WS_FILE"
+
+    # Focusing a workspace makes it its monitor's active one, which is what
+    # releases the empty workspace the output invented for itself.
+    #
+    # FOCUS THE MONITOR FIRST. Focusing a workspace that no longer exists
+    # CREATES it — on whichever monitor currently has focus, not the one it
+    # belongs to. That is how the external's empty workspace 10 kept being
+    # re-created over on the panel while the external invented 11, 12, 13… in
+    # its place. Selecting the monitor first pins where it lands.
+    if [ -f "$ACTIVE_FILE" ]; then
+        while read -r mon ws; do
+            [ -n "$mon" ] || continue
+            if is_enabled "$mon"; then
+                dispatch_lua "hl.dsp.focus({ monitor = \"$mon\" })"
+                dispatch_lua "hl.dsp.focus({ workspace = \"$ws\" })"
+            fi
+        done < "$ACTIVE_FILE"
+    fi
+
+    # …and land back where the user actually was, rather than on whichever
+    # monitor happened to be last in the file.
+    if [ -s "$FOCUS_FILE" ]; then
+        dispatch_lua "hl.dsp.focus({ workspace = \"$(cat "$FOCUS_FILE")\" })"
+    fi
+}
+
+# --- Applying ---------------------------------------------------------------
+# $2 is "saved" or "auto", exactly as for enable_externals: the remembered
+# position only means anything in extend, where the outputs' relative
+# arrangement is the point.
+enable_internal() {
+    local internal=$1 how=$2 scale transform pos cur
+    [ -n "$internal" ] || return 0
+    assert_output_name "$internal"
+
+    pos=auto
+    if [ "$how" = "saved" ]; then pos=$(saved_position "$internal"); fi
+
+    if is_enabled "$internal"; then
+        # Already on, so nothing needs turning back on — but the POSITION can
+        # still be wrong, and extend is the only thing that ever puts the panel
+        # back where it belongs. Returning early unconditionally meant a panel
+        # auto-placed to the RIGHT of the external during a single-output detour
+        # stayed there forever, and was then snapshotted by remember_layout as
+        # though it had been deliberate — baking the drift in permanently.
+        if [ "$pos" = "auto" ]; then return 0; fi
+        cur=$(mons_json | jq -r --arg n "$internal" '.[] | select(.name == $n) | "\(.x)x\(.y)"')
+        if [ "$cur" = "$pos" ]; then return 0; fi
+    fi
+
+    read -r scale transform < <(saved_geometry "$internal")
+    apply "hl.monitor({ output = \"$internal\", disabled = false, mode = \"preferred\", position = \"$pos\", scale = $scale, transform = $transform })"
+    # `hl.monitor` returns before the modeset completes, so the output is not in
+    # `monitors all` yet. Without this the workspace restore checks a monitor
+    # that is not up, decides it is disabled, and skips it.
+    if ! wait_for_enabled "$internal"; then
+        echo "display-mode: $internal did not come back up." >&2
+    fi
+}
+
+disable_internal() {
+    local internal=$1
+    [ -n "$internal" ] || return 0
+    assert_output_name "$internal"
+    apply "hl.monitor({ output = \"$internal\", disabled = true })"
+}
+
+# $1 is "saved" or "auto". Restoring a remembered position is only meaningful
+# for extend, where the outputs' RELATIVE arrangement is the whole point. In
+# external mode there is one output and its saved x offset would just leave a
+# dead gap to its left, so it goes to the origin instead.
+enable_externals() {
+    local how=$1 e pos
+    while read -r e; do
+        [ -n "$e" ] || continue
+        assert_output_name "$e"
+        # LEAVING MIRROR NEEDS A FULL POWER CYCLE, not just `mirror = ""`.
+        # Clearing the key un-mirrors the picture, but the output stays
+        # unadvertised to layer-shell — so waybar and hyprpaper never re-attach
+        # and the external comes back with no bar and no wallpaper, even if you
+        # restart them. A disable→enable re-creates the wl_output global.
+        # Verified: the external's `reserved` goes [0,0,0,0] → [0,52,0,0].
+        if is_mirroring "$e"; then
+            apply "hl.monitor({ output = \"$e\", disabled = true })"
+            sleep 0.3
+        fi
+        if [ "$how" = "saved" ]; then pos=$(saved_position "$e"); else pos=auto; fi
+        apply "hl.monitor({ output = \"$e\", disabled = false, mode = \"preferred\", position = \"$pos\", scale = 1, mirror = \"\" })"
+        if ! wait_for_enabled "$e"; then echo "display-mode: $e did not come back up." >&2; fi
+    done < <(external_names)
+}
+
+disable_externals() {
+    local e
+    while read -r e; do
+        [ -n "$e" ] || continue
+        assert_output_name "$e"
+        apply "hl.monitor({ output = \"$e\", disabled = true })"
+    done < <(external_names)
+}
+
+mirror_externals() {
+    local internal=$1 e
+    assert_output_name "$internal"
+    while read -r e; do
+        [ -n "$e" ] || continue
+        assert_output_name "$e"
+        apply "hl.monitor({ output = \"$e\", disabled = false, mode = \"preferred\", position = \"auto\", scale = 1, mirror = \"$internal\" })"
+        if ! wait_for_enabled "$e"; then echo "display-mode: $e did not come back up." >&2; fi
+    done < <(external_names)
+}
+
+# Waybar does not survive its output being removed and re-added: the process
+# stays alive but its layer surfaces are gone, so you end up with a running
+# waybar and no bars on any screen (plus a trail of defunct children). There is
+# no IPC to rebuild them, so the bar is bounced after every layout change — the
+# same conclusion pocket4-display reached for the portrait/landscape switch.
+#
+# The mechanism lives in ~/.mybin/restart-bar, which is the ONE implementation
+# shared with pocket4-tablet-mode (bar does not reflow on a scale change) and
+# the Super+CTRL+B keybind. Called by ABSOLUTE INSTALLED path: ~/.mybin is not
+# on the PATH a Hyprland bind or a waybar on-click hands its child, so a bare
+# name is "command not found" — and under `set -e` that would abort the caller
+# mid-layout-change.
+restart_bar() {
+    "$HOME/.mybin/restart-bar"
+}
+
+# The layout mirror was engaged from. Recorded on the way IN to mirror — by the
+# toggle and by a bare `display-mode mirror` alike, so the two cannot disagree.
+# Absent only before mirror has ever been used, where extend (the config
+# default, and the only base mirror is fully meaningful from) is the honest
+# answer rather than a guess papering over a lost value.
+base_mode() {
+    if [ -s "$BASE_FILE" ]; then cat "$BASE_FILE"; else echo extend; fi
+}
+
+set_mode() {
+    local want=$1 internal
+    internal=$(internal_name)
+
+    # Remember where we came from when entering mirror, and forget it on the way
+    # out, so the record only ever exists while it means something.
+    if [ "$want" = "mirror" ]; then
+        if [ "$(current_mode)" != "mirror" ]; then
+            mkdir -p "$STATE_DIR"
+            current_mode > "$BASE_FILE"
+        fi
+    else
+        rm -f "$BASE_FILE"
+    fi
+
+    # BOTH snapshots happen before ANY monitor rule is touched. Re-declaring a
+    # monitor reshuffles workspace assignments onto it, so saving from inside
+    # disable_internal — i.e. after enable_externals had already run — recorded
+    # a panel that had just been emptied, and faithfully restored nothing.
+    remember_layout
+    save_workspaces
+
+    case "$want" in
+    extend)
+        # ORDER IS LOAD-BEARING: externals first, internal last. Re-declaring a
+        # monitor rule reshuffles workspace assignments, so bringing the panel
+        # up first (which is what restores its workspaces) and touching the
+        # external afterwards drags them all straight back onto the external.
+        require_external extend
+        enable_externals saved
+        enable_internal "$internal" saved
+        ;;
+    external)
+        require_external external
+        enable_externals auto
+        disable_internal "$internal"
+        ;;
+    internal)
+        if [ -z "$internal" ]; then
+            echo "display-mode: this machine has no internal panel." >&2
+            exit 1
+        fi
+        enable_internal "$internal" auto
+        disable_externals
+        ;;
+    mirror)
+        require_external mirror
+        if [ -z "$internal" ]; then
+            echo "display-mode: mirror needs an internal panel to mirror FROM." >&2
+            exit 1
+        fi
+        enable_internal "$internal" auto
+        mirror_externals "$internal"
+        ;;
+    *) usage ;;
+    esac
+
+    # Every branch above re-declares at least one monitor, and re-declaring a
+    # monitor drags workspaces onto it — so the restore runs LAST, and
+    # unconditionally. Driving it from inside enable_internal was the bug: that
+    # returns early when the panel is already up, so mirror→extend and
+    # internal→extend re-declared the externals, let them take the workspaces,
+    # and restored nothing.
+    restore_workspaces
+    restart_bar
+}
+
+# --- Reporting --------------------------------------------------------------
+# Toast the new mode when driven from a keybind. `notify` is the fleet's
+# front-end (notify-send on the Hyprland machines); it is genuinely optional
+# here — a machine mid-provision may not have it yet — so this is an explicit
+# existence check, not an error swallowed with `|| true`.
+announce() {
+    if [ -x "$HOME/.mybin/notify" ]; then
+        "$HOME/.mybin/notify" "Display: $1"
+    fi
+}
+
+describe() {
+    local internal mode
+    internal=$(internal_name)
+    mode=$(current_mode)
+    # Mirror is an overlay, so say what it is covering — otherwise there is no
+    # way to tell where toggling it off will land you.
+    if [ "$mode" = "mirror" ]; then
+        echo "mode: mirror (over $(base_mode))"
+    else
+        echo "mode: $mode"
+    fi
+    printf '  %-12s %-9s %s\n' OUTPUT STATE GEOMETRY
+    mons_json | jq -r '
+        .[] |
+        "\(.name)\t" +
+        (if .disabled then "off" elif .mirrorOf != "none" then "mirror" else "on" end) + "\t" +
+        (if .disabled then "-"
+         else "\(.width)x\(.height) @\(.x),\(.y) scale \(.scale) transform \(.transform)"
+         end)' |
+        while IFS=$'\t' read -r n s g; do printf '  %-12s %-9s %s\n' "$n" "$s" "$g"; done
+    if [ -n "$internal" ]; then echo "  internal panel: $internal"; fi
+}
+
+# --- Main -------------------------------------------------------------------
+resolve_session
+
+case "${1:-}" in
+"") describe ;;
+get) current_mode ;;
+extend | external | internal | mirror) set_mode "$1" ;;
+cycle | mirror-toggle)
+    # THE KEYBINDS ARE A NO-OP WITH NOTHING PLUGGED IN. Every layout here is
+    # about the relationship between the panel and an external, so with only the
+    # panel there is nothing any of them could mean — and doing something anyway
+    # would cost a modeset and a bar bounce to arrive back where you started.
+    # Only the bare keybind verbs are guarded; naming a mode explicitly still
+    # reports the real error, which is what a script or a person wants.
+    if ! has_external; then exit 0; fi
+    ;;&
+cycle)
+    cur=$(current_mode)
+    # Cycling out of mirror steps on from the layout mirror was covering, not
+    # from mirror itself — so Super+O in mirror lands exactly where Super+Shift+O
+    # followed by Super+O would. It is done as ONE transition rather than two:
+    # the end state is identical, and passing through the base first would cost
+    # a second modeset and a second bar bounce for nothing.
+    if [ "$cur" = "mirror" ]; then cur=$(base_mode); fi
+
+    next=${MODES[0]}
+    for i in "${!MODES[@]}"; do
+        if [ "${MODES[$i]}" = "$cur" ]; then
+            next=${MODES[$(((i + 1) % ${#MODES[@]}))]}
+            break
+        fi
+    done
+    set_mode "$next"
+    announce "$next"
+    ;;
+mirror-toggle)
+    # An overlay, so leaving lands back on whatever mirror was covering.
+    if [ "$(current_mode)" = "mirror" ]; then to=$(base_mode); else to=mirror; fi
+    set_mode "$to"
+    announce "$to"
+    ;;
+*) usage ;;
+esac

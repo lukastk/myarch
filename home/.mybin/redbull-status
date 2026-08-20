@@ -1,0 +1,83 @@
+#!/bin/bash
+# redbull-status — show whether a `redbull` stay-awake is running, and what is
+# actually inhibited on this machine right now.
+#
+# Everything here is DERIVED, never stored: logind's inhibitor list is the
+# authority for what is held and by whom, and the time remaining is read back
+# off the holding process itself — /proc/<pid>/cmdline ends in the `sleep
+# <seconds>` that redbull asked for, and `ps -o etimes=` says how much of it
+# has gone. Nothing on disk can disagree with reality.
+#
+# It reports on ALL block inhibitors, not just redbull's, so the overlap with
+# `server-mode` (which holds an indefinite sleep lock of its own) is visible in
+# one place — otherwise "redbull: off" reads as "this machine will suspend",
+# which on a machine in server mode is wrong.
+
+set -euo pipefail
+
+WHO=redbull
+
+# One snapshot, so every line below describes the same instant.
+inhibitors=$(systemd-inhibit --list --json=short)
+
+fmt_dur() {
+	local s=$1
+	if [ "$s" -ge 3600 ]; then
+		printf '%dh %02dm' $((s / 3600)) $((s % 3600 / 60))
+	elif [ "$s" -ge 60 ]; then
+		printf '%dm %02ds' $((s / 60)) $((s % 60))
+	else
+		printf '%ds' "$s"
+	fi
+}
+
+# Who holds a block lock on one component of `what` (the field is a
+# colon-joined set, e.g. "idle:sleep:handle-lid-switch").
+holders() {
+	jq -r --arg what "$1" \
+		'[.[] | select(.mode == "block" and (.what | split(":") | index($what)))]
+		 | map(.who) | unique | join(", ")' <<<"$inhibitors"
+}
+
+lock=$(jq -r --arg who "$WHO" \
+	'[.[] | select(.who == $who and .mode == "block")][0] // empty | "\(.pid)\t\(.what)"' \
+	<<<"$inhibitors")
+
+if [ -z "$lock" ]; then
+	printf '%-10s %s\n' "redbull:" "off"
+else
+	pid=${lock%%$'\t'*}
+	what=${lock##*$'\t'}
+	case "$what" in
+	*idle*) scope="screen staying on" ;;
+	*) scope="screen may still lock and blank" ;;
+	esac
+
+	# The duration redbull asked for is the last argument of the holding
+	# process; how much of it is gone is that process's elapsed time.
+	if [ -r "/proc/$pid/cmdline" ]; then
+		total=$(tr '\0' '\n' <"/proc/$pid/cmdline" | tail -1)
+		elapsed=$(ps -o etimes= -p "$pid" | tr -d ' ')
+		left=$((total - elapsed))
+		[ "$left" -lt 0 ] && left=0
+		printf '%-10s %s\n' "redbull:" "ON — $(fmt_dur "$left") left, $scope  [pid $pid]"
+	else
+		# The lock is listed but its process is already gone; logind will drop
+		# it momentarily. Say so rather than inventing a remaining time.
+		printf '%-10s %s\n' "redbull:" "expiring (pid $pid has exited)"
+	fi
+fi
+
+for what in sleep idle handle-lid-switch; do
+	case "$what" in
+	sleep) label="suspend:" ;;
+	idle) label="idle:" ;;
+	handle-lid-switch) label="lid:" ;;
+	esac
+	who=$(holders "$what")
+	if [ -n "$who" ]; then
+		printf '%-10s %s\n' "$label" "inhibited by: $who"
+	else
+		printf '%-10s %s\n' "$label" "not inhibited"
+	fi
+done

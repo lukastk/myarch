@@ -1,0 +1,105 @@
+# Myarch foot config (desktop) — same JetBrains Mono + "Arthur" colour
+# scheme as kitty.conf, so the two look identical.
+#
+# WHY foot EXISTS ALONGSIDE kitty: kitty does not translate touchscreen taps
+# into terminal mouse reports, so tapping inside a TUI (tmux panes, for example)
+# does nothing — it only handles touch for scrolling. foot does, which matters
+# on pocket4 where the trackpad folds away in pad mode and touch is the only
+# pointer. Verified empirically: taps work in tmux under foot and gnome-console,
+# not under kitty. pocket4 therefore defaults to foot; other machines keep kitty.
+#
+# foot also implements the kitty keyboard protocol (see its CHANGELOG), which is
+# what lets Shift+Enter pass through tmux to Claude Code / pi — the reason
+# kitty was chosen in the first place.
+
+# Explicit fallback chain. foot does NOT walk fontconfig's fallback list on its
+# own the way kitty does — it uses the comma-separated fonts listed here, in
+# order, for glyphs the primary font lacks. Without this, symbols outside
+# JetBrains Mono (e.g. U+23F5 "⏵", which Claude Code uses in its status line)
+# render as underscores.
+font=JetBrainsMono Nerd Font:size=11, Symbols Nerd Font Mono:size=11, Noto Sans Symbols 2:size=11, Adwaita Mono:size=11
+
+[scrollback]
+lines=10000
+
+[colors-dark]
+foreground={{ theme.foreground[1:] }}
+background={{ theme.background[1:] }}
+
+# `cursor=<text> <cursor>` — the inverse pair of kitty's cursor /
+# cursor_text_color. NOTE this belongs in the COLOUR section, not [cursor];
+# [cursor] only takes style/blink/thickness.
+cursor={{ theme.cursor_text[1:] }} {{ theme.cursor[1:] }}
+
+selection-foreground={{ theme.selection_foreground[1:] }}
+selection-background={{ theme.selection_background[1:] }}
+
+# kitty color0-7 -> regular0-7
+regular0={{ theme.palette[0][1:] }}
+regular1={{ theme.palette[1][1:] }}
+regular2={{ theme.palette[2][1:] }}
+regular3={{ theme.palette[3][1:] }}
+regular4={{ theme.palette[4][1:] }}
+regular5={{ theme.palette[5][1:] }}
+regular6={{ theme.palette[6][1:] }}
+regular7={{ theme.palette[7][1:] }}
+
+# kitty color8-15 -> bright0-7
+bright0={{ theme.palette[8][1:] }}
+bright1={{ theme.palette[9][1:] }}
+bright2={{ theme.palette[10][1:] }}
+bright3={{ theme.palette[11][1:] }}
+bright4={{ theme.palette[12][1:] }}
+bright5={{ theme.palette[13][1:] }}
+bright6={{ theme.palette[14][1:] }}
+bright7={{ theme.palette[15][1:] }}
+
+[colors-light]
+foreground={{ theme.foreground[1:] }}
+background={{ theme.background[1:] }}
+
+# `cursor=<text> <cursor>` — the inverse pair of kitty's cursor /
+# cursor_text_color. NOTE this belongs in the COLOUR section, not [cursor];
+# [cursor] only takes style/blink/thickness.
+cursor={{ theme.cursor_text[1:] }} {{ theme.cursor[1:] }}
+
+selection-foreground={{ theme.selection_foreground[1:] }}
+selection-background={{ theme.selection_background[1:] }}
+
+# kitty color0-7 -> regular0-7
+regular0={{ theme.palette[0][1:] }}
+regular1={{ theme.palette[1][1:] }}
+regular2={{ theme.palette[2][1:] }}
+regular3={{ theme.palette[3][1:] }}
+regular4={{ theme.palette[4][1:] }}
+regular5={{ theme.palette[5][1:] }}
+regular6={{ theme.palette[6][1:] }}
+regular7={{ theme.palette[7][1:] }}
+
+# kitty color8-15 -> bright0-7
+bright0={{ theme.palette[8][1:] }}
+bright1={{ theme.palette[9][1:] }}
+bright2={{ theme.palette[10][1:] }}
+bright3={{ theme.palette[11][1:] }}
+bright4={{ theme.palette[12][1:] }}
+bright5={{ theme.palette[13][1:] }}
+bright6={{ theme.palette[14][1:] }}
+bright7={{ theme.palette[15][1:] }}
+
+[url]
+# foot only treats a string as a URL if it matches this regex, and the default
+# scheme list does NOT include obsidian:// — which is why Obsidian adv-uri links
+# were inert. This is the shipped default from /etc/xdg/foot/foot.ini with
+# `obsidian://` added to the scheme alternation; everything else is untouched.
+#
+# Activation is foot's URL MODE, not a mouse click: press Ctrl+Shift+O, each URL
+# gets a letter label, type the label to open it. foot deliberately does not
+# open URLs on plain click, because that would fight text selection. Links
+# emitted as OSC-8 hyperlinks by the program itself are underlined and can be
+# activated the same way.
+#
+# xdg-open already routes obsidian:// to obsidian.desktop on this machine
+# (verify with: xdg-mime query default x-scheme-handler/obsidian).
+launch=xdg-open ${url}
+osc8-underline=always
+regex=(((obsidian://|https?://|mailto:|ftp://|file:|ssh:|ssh://|git://|tel:|magnet:|ipfs://|ipns://|gemini://|gopher://|news:)|www\.)([0-9a-zA-Z:/?#@!$&*+,;=.~_%^\-]+|\([]\["0-9a-zA-Z:/?#@!$&'*+,;=.~_%^\-]*\)|\[[\(\)"0-9a-zA-Z:/?#@!$&'*+,;=.~_%^\-]*\]|"[]\[\(\)0-9a-zA-Z:/?#@!$&'*+,;=.~_%^\-]*"|'[]\[\(\)0-9a-zA-Z:/?#@!$&*+,;=.~_%^\-]*')+([0-9a-zA-Z/#@$&*+=~_%^\-]|\([]\["0-9a-zA-Z:/?#@!$&'*+,;=.~_%^\-]*\)|\[[\(\)"0-9a-zA-Z:/?#@!$&'*+,;=.~_%^\-]*\]|"[]\[\(\)0-9a-zA-Z:/?#@!$&'*+,;=.~_%^\-]*"|'[]\[\(\)0-9a-zA-Z:/?#@!$&*+,;=.~_%^\-]*'))

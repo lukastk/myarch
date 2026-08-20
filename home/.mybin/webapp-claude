@@ -1,0 +1,4 @@
+#!/bin/bash
+# Claude as a Brave app window (≙ the Claude desktop app pinned right on the
+# macbook AI space). Routed to the AI workspace by the hyprland windowrules.
+exec brave --app=https://claude.ai

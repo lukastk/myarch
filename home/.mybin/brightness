@@ -1,0 +1,114 @@
+#!/bin/bash
+# brightness up|down|get — the XF86MonBrightness keys, as ONE scale spanning two
+# mechanisms.
+#
+# The backlight alone cannot give you a screen usable in a dark room. Its floor
+# here is raw 2 of 64764 (amdgpu_bl1) and that is still visibly lit — so is raw
+# 0, which is why `pause` powers the panel off rather than dimming it. Below the
+# floor this keeps going with hyprsunset's gamma ramp, which scales the output
+# uniformly (gamma 60 => CTM diag 0.6, no colour shift in --identity mode), so
+# the screen keeps getting darker while staying readable.
+#
+# The two stages are strictly ordered, which is what makes the scale monotonic
+# and every press reversible: the backlight only moves while gamma is at 100,
+# and gamma is always restored to 100 before the backlight comes back up. Going
+# down: backlight max -> backlight floor -> gamma 100 -> GAMMA_MIN. Going up is
+# the exact reverse.
+#
+# GAMMA_MIN is a floor, not a limit to be tidied away later: gamma 0 is a black
+# screen you cannot see well enough to undo.
+
+set -uo pipefail
+
+# -e4: brightnessctl's exponential curve, which is roughly perceptual — equal
+# steps look equal, instead of the top half of the range doing almost nothing.
+# -n2: the driver's floor. Both must match BACKLIGHT_MIN below or the handover
+# to gamma happens at the wrong point.
+BACKLIGHT_ARGS=(-e4 -n2)
+BACKLIGHT_MIN=2
+BACKLIGHT_STEP="5%"
+
+GAMMA_MIN=10
+GAMMA_STEP=10
+
+NOTIFY="$HOME/.mybin/notify"
+
+usage() {
+    echo "Usage: brightness up|down|get"
+    exit "${1:-0}"
+}
+
+# hyprsunset's gamma, rounded to an integer, or empty if the daemon is not
+# reachable. It answers with a float ("60.000004"), so this cannot just be read
+# as a number.
+gamma_get() {
+    local raw
+    raw=$(hyprctl hyprsunset gamma 2>/dev/null) || return 1
+    awk -v g="$raw" 'BEGIN { if (g ~ /^[0-9.]+$/ && g != "") printf "%d\n", g + 0.5 }'
+}
+
+gamma_set() {
+    hyprctl hyprsunset gamma "$1" >/dev/null 2>&1
+}
+
+# Autostarted from hyprland.lua, started here too so a brightness key still
+# works if the daemon died — losing half the range silently would be worse than
+# the half-second this costs. NOT a fallback for the daemon being absent: if it
+# cannot be started, the caller says so out loud.
+ensure_hyprsunset() {
+    [[ -n "$(gamma_get)" ]] && return 0
+    pgrep -x hyprsunset >/dev/null 2>&1 || setsid hyprsunset --identity >/dev/null 2>&1 &
+    local i
+    for ((i = 0; i < 10; i++)); do
+        sleep 0.1
+        [[ -n "$(gamma_get)" ]] && return 0
+    done
+    return 1
+}
+
+backlight_get() {
+    brightnessctl get
+}
+
+case "${1:-}" in
+    up|down|get) action="$1" ;;
+    -h|--help)   usage 0 ;;
+    *)           usage 1 ;;
+esac
+
+ensure_hyprsunset || true
+gamma=$(gamma_get)
+backlight=$(backlight_get)
+
+if [[ "$action" == get ]]; then
+    printf 'backlight: %s / %s (floor %s)\n' "$backlight" "$(brightnessctl max)" "$BACKLIGHT_MIN"
+    printf 'gamma:     %s\n' "${gamma:-unavailable (hyprsunset not running)}"
+    exit 0
+fi
+
+if [[ "$action" == down ]]; then
+    # Below the backlight floor, or already in the gamma stage: keep dimming
+    # with gamma.
+    if [[ -n "$gamma" ]] && { (( gamma < 100 )) || (( backlight <= BACKLIGHT_MIN )); }; then
+        next=$(( gamma - GAMMA_STEP ))
+        (( next < GAMMA_MIN )) && next=$GAMMA_MIN
+        gamma_set "$next"
+    elif (( backlight > BACKLIGHT_MIN )); then
+        brightnessctl "${BACKLIGHT_ARGS[@]}" -q set "${BACKLIGHT_STEP}-"
+    else
+        # At the backlight floor with no gamma stage to fall into — the one case
+        # where a press genuinely cannot do anything, so say why rather than
+        # no-op silently.
+        "$NOTIFY" "Brightness---At the backlight floor, and hyprsunset is not running, so there is no dimming below it."
+        exit 1
+    fi
+else
+    # Gamma is restored FIRST, so up exactly retraces the way down.
+    if [[ -n "$gamma" ]] && (( gamma < 100 )); then
+        next=$(( gamma + GAMMA_STEP ))
+        (( next > 100 )) && next=100
+        gamma_set "$next"
+    else
+        brightnessctl "${BACKLIGHT_ARGS[@]}" -q set "${BACKLIGHT_STEP}+"
+    fi
+fi

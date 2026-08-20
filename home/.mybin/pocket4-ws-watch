@@ -1,0 +1,63 @@
+#!/bin/bash
+# pocket4-ws-watch — refresh the waybar workspace buttons on Hyprland events.
+#
+# The buttons (see pocket4-ws) declare "signal": 8 and "interval": "once".
+# Per `man 5 waybar-custom`: "If a signal is defined then the script will run
+# once on startup and will only update with a signal" — so a signal is the ONLY
+# thing that updates them, and defining an interval as a fallback does nothing.
+# That makes this watcher load-bearing rather than an optimisation.
+#
+# FAILURE MODE THIS GUARDS AGAINST: if the watcher is not running, waybar still
+# refreshes the module you CLICKED (it re-runs that module's exec), but not the
+# others — so the workspace you left keeps its `active` class and you end up
+# with two highlighted buttons, while keyboard switching shows nothing at all.
+# The UI silently lies about where you are. Hence the reconnect loop below:
+# never exit just because the socket hiccuped.
+#
+# Polling instead would mean 10 modules x 2 hyprctl calls per interval on a
+# battery-powered machine, for something that changes only when you switch
+# workspace — hence events rather than polling.
+set -uo pipefail
+
+SIGNAL=8
+
+# `pkill -x` (exact process name). NEVER `pkill -f waybar` — that matches any
+# command line containing the string, including this script's own.
+poke() { pkill -x -RTMIN+"$SIGNAL" waybar 2>/dev/null || true; }
+
+while true; do
+    sock="${XDG_RUNTIME_DIR}/hypr/${HYPRLAND_INSTANCE_SIGNATURE:-}/.socket2.sock"
+
+    if [ ! -S "$sock" ]; then
+        # Hyprland is gone or restarting (its instance signature changes across
+        # sessions). Wait rather than exit — exiting is what left the buttons
+        # stale after a session restart.
+        sleep 5
+        continue
+    fi
+
+    # Refresh once on (re)connect, so the buttons are correct even if events
+    # were missed while disconnected.
+    poke
+
+    socat -U - "UNIX-CONNECT:$sock" 2>/dev/null | while read -r line; do
+        case "$line" in
+            workspace\>*|focusedmon\>*|openwindow\>*|closewindow\>*|movewindow\>*|createworkspace\>*|destroyworkspace\>*)
+                poke
+                ;;
+            # Showing/hiding the scratchpad (Super+S) emits NONE of the above —
+            # `workspace>>` covers normal workspaces only. Without this the
+            # scratchpad pill would keep whatever state it was last poked with.
+            # Both spellings, because Hyprland emits the v1 and v2 forms as
+            # separate events and "activespecialv2>>" does not match the v1
+            # pattern.
+            activespecial\>*|activespecialv2\>*)
+                poke
+                ;;
+        esac
+    done
+
+    # socat returned: the compositor went away or the connection dropped.
+    # Loop round and reconnect rather than dying.
+    sleep 2
+done

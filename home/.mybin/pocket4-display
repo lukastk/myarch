@@ -1,0 +1,143 @@
+#!/bin/bash
+# pocket4-display — display rotation for the GPD Pocket 4.
+#
+# The panel is physically portrait (1600x2560) mounted sideways, so "landscape"
+# (normal laptop use) is transform 3, not 0. See
+# src/hyprland/*.lua.jinja for the boot-time config.
+#
+# TWO THINGS MUST CHANGE TOGETHER: the monitor transform and the touchscreen
+# device transform. Rotating only the monitor leaves touch input mapped to the
+# old orientation, so taps land in the wrong place. That coupling is the entire
+# reason this is a script rather than two keybinds.
+#
+# NOTE: `hyprctl keyword` does NOT work here — the Hyprland config is Lua, and
+# hyprctl reports "keyword can't work with non-legacy parsers. Use eval."
+# Runtime changes therefore go through `hyprctl eval` with Lua expressions.
+#
+# Usage:
+#   pocket4-display orientation   # toggle landscape <-> portrait
+#   pocket4-display flip          # rotate 180 degrees
+#   pocket4-display get           # print "landscape" or "portrait" (for waybar)
+#   pocket4-display set <0-3>     # set an explicit transform
+set -euo pipefail
+
+MON="eDP-1"
+TOUCH="nvtk0603:00-0603:f001"
+
+# Transform values: 0 = normal, 1 = 90deg, 2 = 180deg, 3 = 270deg.
+# On this panel the LANDSCAPE orientations are the odd ones (1, 3) and the
+# PORTRAIT orientations are the even ones (0, 2), because the panel itself is
+# mounted rotated.
+LANDSCAPE_DEFAULT=3
+PORTRAIT_DEFAULT=0
+
+cur_transform() { hyprctl monitors -j | jq -r '.[0].transform'; }
+cur_scale()     { hyprctl monitors -j | jq -r '.[0].scale'; }
+
+is_landscape() { [ $(( $(cur_transform) % 2 )) -eq 1 ]; }
+
+# Waybar cannot switch layouts at runtime, so it is restarted against the other
+# config. WHICH config (and which stylesheet) is not decided here —
+# `pocket4-waybar --layout-for <transform>` owns that rule, because it depends on
+# the tablet-mode scale as well as the orientation, and a second copy would drift.
+restart_waybar() {
+    local cfg="$1" style="$2"
+    [ -f "$cfg" ] || return 0
+    # `pkill -x` (exact name) — never `pkill -f waybar`, which would also match
+    # the command line of whatever shell is running this script.
+    pkill -x waybar 2>/dev/null || true
+    sleep 0.3
+    # Via pocket4-waybar, NOT `waybar` directly: it is the one place that sets
+    # the RTMIN band to SIG_IGN before exec, without which a pocket4-ws-watch
+    # poke landing during waybar's startup kills it silently and the rotation
+    # leaves you with no bar at all. `--layout` keeps the explicit choice — we
+    # already know the target orientation, and the monitor may not have finished
+    # switching when pocket4-waybar's own probe would read it.
+    setsid uwsm app -- "$HOME/.mybin/pocket4-waybar" --layout "$cfg" "$style" >/dev/null 2>&1 < /dev/null &
+}
+
+apply() {
+    local t="$1" s="$2" was_landscape=1
+    is_landscape || was_landscape=0
+
+    hyprctl eval "hl.monitor({ output = \"$MON\", mode = \"preferred\", position = \"auto\", scale = $s, transform = $t })" >/dev/null
+    hyprctl eval "hl.device({ name = \"$TOUCH\", transform = $t })" >/dev/null
+
+    # Only bounce waybar when the orientation CLASS changes — a 180 flip within
+    # landscape (or within portrait) keeps both the layout AND the logical width,
+    # so restarting there would just be a visible flicker for nothing.
+    #
+    # Note the class change is the trigger even when it does not change which
+    # CONFIG is used (in tablet mode both orientations are two-row): the bar must
+    # still be rebuilt, because rotating changes the logical width — 800 to 1280
+    # — and waybar does not reflow to a new size on its own.
+    local now_landscape=1
+    [ $(( t % 2 )) -eq 1 ] || now_landscape=0
+    if [ "$was_landscape" != "$now_landscape" ]; then
+        local config style
+        read -r config style < <("$HOME/.mybin/pocket4-waybar" --layout-for "$t")
+        restart_waybar "$config" "$style"
+    fi
+}
+
+case "${1:-}" in
+    orientation)
+        if is_landscape; then apply "$PORTRAIT_DEFAULT" "$(cur_scale)"
+        else                  apply "$LANDSCAPE_DEFAULT" "$(cur_scale)"
+        fi
+        ;;
+    flip)
+        apply "$(( ($(cur_transform) + 2) % 4 ))" "$(cur_scale)"
+        ;;
+    get)
+        if is_landscape; then echo landscape; else echo portrait; fi
+        ;;
+    status)
+        # waybar `return-type: json` form. The "class" is what CSS keys off, so
+        # the button can show its state; "tooltip" says what a tap will do.
+        if is_landscape; then
+            printf '{"text":"\xf3\xb0\x91\xa8","class":"landscape","tooltip":"Landscape — tap for portrait"}\n'
+        else
+            printf '{"text":"\xf3\xb0\x91\xa8","class":"portrait","tooltip":"Portrait — tap for landscape"}\n'
+        fi
+        ;;
+    set)
+        [ -n "${2:-}" ] || { echo "usage: $0 set <0-3>" >&2; exit 2; }
+        apply "$2" "$(cur_scale)"
+        ;;
+    scale)
+        # Step through KNOWN-CLEAN scales rather than nudging by an arbitrary
+        # amount. Hyprland refuses a scale that does not divide the panel into
+        # whole logical pixels: it snaps to the nearest valid value AND emits a
+        # warning. Asking for 1.6 + 0.1 = 1.7 lands on 1.67 with a complaint,
+        # which is what made the buttons look like they errored.
+        #
+        # For this 1600x2560 panel these all give integer logical dimensions:
+        #   1.00 -> 1600x2560   1.25 -> 1280x2048   1.60 -> 1000x1600
+        #   2.00 ->  800x1280   2.50 ->  640x1024
+        SCALES=(1.00 1.25 1.60 2.00 2.50)
+        [ -n "${2:-}" ] || { echo "usage: $0 scale <up|down|N>" >&2; exit 2; }
+        cur=$(cur_scale)
+        case "$2" in
+            up|down|+*|-*)
+                # Find the nearest rung to where we are, then step off it.
+                idx=0; best=0; bestd=999
+                for i in "${!SCALES[@]}"; do
+                    d=$(awk -v a="${SCALES[$i]}" -v b="$cur" 'BEGIN{d=a-b; if(d<0)d=-d; print d}')
+                    if awk -v d="$d" -v bd="$bestd" 'BEGIN{exit !(d<bd)}'; then bestd=$d; best=$i; fi
+                done
+                case "$2" in
+                    up|+*)   idx=$(( best + 1 )); [ "$idx" -ge "${#SCALES[@]}" ] && idx=$(( ${#SCALES[@]} - 1 )) ;;
+                    down|-*) idx=$(( best - 1 )); [ "$idx" -lt 0 ] && idx=0 ;;
+                esac
+                new="${SCALES[$idx]}"
+                ;;
+            *) new="$2" ;;
+        esac
+        apply "$(cur_transform)" "$new"
+        ;;
+    *)
+        echo "usage: $0 {orientation|flip|get|set <0-3>}" >&2
+        exit 2
+        ;;
+esac

@@ -1,0 +1,219 @@
+#!/bin/bash
+# pocket4-waybar — start waybar with the layout that FITS the current screen.
+#
+# pocket4 has two waybar layouts: a single row (config.jsonc) and two stacked
+# rows (config-narrow.jsonc). Which one is right is a question about the logical
+# WIDTH available, and two independent things set that — the orientation and the
+# tablet-mode scale:
+#
+#     portrait  1600 physical / 1.6 = 1000 logical   / 2.0 =  800
+#     landscape 2560 physical / 1.6 = 1600 logical   / 2.0 = 1280
+#
+# The one-row bar lays out at ~1520 logical px, so it fits ONLY the top-left
+# cell: landscape at desktop scale. Everything else needs two rows. That is the
+# whole rule, and `layout_for` below is the single place it is written down —
+# pocket4-display asks this script rather than repeating it.
+#
+# It used to key off orientation alone, which left tablet-mode LANDSCAPE on the
+# one-row layout at 1280px: ~240px of right-hand modules sat past the edge of the
+# panel, unreachable. Worse than merely clipped — when a row's minimum width
+# exceeds its surface, waybar commits an oversized buffer, Hyprland squeezes it
+# into the visible box, and the bar renders compressed with every tap landing on
+# the wrong module.
+#
+# pocket4-display and pocket4-tablet-mode swap layouts when you rotate or change
+# scale, but that only covers changes made while the session is running. Anything
+# that starts waybar independently — session start, or a manual restart — would
+# otherwise always load the landscape config regardless of the actual state.
+# Deriving it here makes every path correct.
+set -euo pipefail
+
+CONF_WIDE="$HOME/.config/waybar/config.jsonc"
+CONF_NARROW="$HOME/.config/waybar/config-narrow.jsonc"
+STYLE_DEFAULT="$HOME/.config/waybar/style.css"
+STYLE_COMPACT="$HOME/.config/waybar/style-compact.css"
+
+# The one-row bar lays out at ~1520 logical px, so it needs a full-width screen.
+ONE_ROW_MIN_WIDTH=1600
+# The two-row bar's rows measure up to 879 logical px at the default metrics
+# (row 2 while dictation is recording). Below roughly that, the rows no longer
+# fit and the bar needs style-compact.css as well — see its header.
+COMPACT_BELOW_WIDTH=900
+
+# How many LOGICAL px wide the panel would be at a given transform. The mode is
+# read rather than hardcoded, but note hyprctl reports it in the panel's OWN
+# orientation — 1600x2560 here, because the panel is physically portrait and
+# mounted rotated — so a landscape (odd) transform swaps the two.
+logical_width_for() {
+    local transform="$1" mon
+    mon=$(hyprctl monitors -j | jq -r 'map(select(.name == "eDP-1"))[0] | "\(.width) \(.height) \(.scale)"')
+    awk -v t="$transform" -v m="$mon" 'BEGIN {
+        split(m, a, " ")
+        printf "%d\n", ((t % 2 == 1) ? a[2] : a[1]) / a[3]
+    }'
+}
+
+# Everything is decided by the WIDTH the panel leaves, which is the product of
+# the orientation and the tablet-mode scale — never by either one alone. Prints
+# "<config> <style>".
+layout_for() {
+    local width
+    width="$(logical_width_for "$1")"
+    if [ "$width" -ge "$ONE_ROW_MIN_WIDTH" ]; then
+        printf '%s %s\n' "$CONF_WIDE" "$STYLE_DEFAULT"
+    elif [ "$width" -lt "$COMPACT_BELOW_WIDTH" ]; then
+        printf '%s %s\n' "$CONF_NARROW" "$STYLE_COMPACT"
+    else
+        printf '%s %s\n' "$CONF_NARROW" "$STYLE_DEFAULT"
+    fi
+}
+
+# Query mode, for pocket4-display: which layout would a given transform get?
+# Answered BEFORE the systemd-cat re-exec below, so asking costs nothing and
+# writes nothing to the journal.
+if [ "${1:-}" = "--layout-for" ]; then
+    [ -n "${2:-}" ] || { echo "pocket4-waybar: --layout-for requires a transform" >&2; exit 2; }
+    layout_for "$2"
+    exit 0
+fi
+
+# Send this script's output AND waybar's own to the journal, under the tag
+# `pocket4-waybar` — read it with `journalctl --user -t pocket4-waybar`.
+#
+# Without this there is NO record anywhere of why the bar failed to appear.
+# `uwsm app` runs its child in a systemd SCOPE, and a scope inherits the stdio
+# of whoever forked it — here Hyprland, which discards it. Measured: hyprpaper,
+# mako and hypridle are all started the same way and none of them puts a single
+# line in the journal. So when the bar silently did not start on the logins of
+# 2026-07-29 20:58 and 2026-07-30 14:41, the ONLY trace either left was a
+# systemd "Started pocket4-waybar." line and the absence of the scope
+# afterwards — not enough to tell "the poll gave up" from "waybar exited",
+# which is why the previous fix had to be guessed at. Both now say so out loud.
+#
+# systemd-cat EXECS its command rather than staying as a parent, so the scope's
+# main process is still waybar itself and `pkill -x waybar` keeps working.
+if [ -z "${POCKET4_WAYBAR_JOURNAL:-}" ]; then
+    export POCKET4_WAYBAR_JOURNAL=1
+    exec systemd-cat -t pocket4-waybar "$0" "$@"
+fi
+
+# Start waybar — the ONLY place that does, so the signal protection below covers
+# every path (session start and pocket4-display's rotation restart alike).
+#
+# THE SIGNAL PROTECTION IS LOAD-BEARING. The bar's buttons are refreshed by
+# poking waybar with realtime signals — RTMIN+8 for the workspace buttons
+# (pocket4-ws-watch, on every Hyprland event) and RTMIN+9 for the thermal button
+# (pocket4-thermal-mode). waybar installs handlers for those, but only once it
+# is up: the DEFAULT action for a realtime signal is TERMINATE, so any poke
+# landing between execve and waybar's own sigaction() kills it outright — no
+# message, no exit code anywhere, no core dump, just a session with no bar. That
+# is exactly what happened on the logins of 2026-07-29 20:58, 2026-07-30 14:41
+# and 2026-07-30 14:58: pocket4-ws-watch starts 0.7ms after this script, so its
+# pokes are already in flight while waybar is still starting. Reproduced 3/3.
+#
+# SIG_IGN is the fix because, unlike a handler, it SURVIVES execve — so the
+# window is "ignored" rather than "fatal", with no sleep or retry to get wrong.
+# waybar then overrides it with its own handler during startup, verified via
+# /proc/<pid>/status: SigCgt has RTMIN+8 set and SigIgn does not, i.e. the
+# buttons still refresh exactly as before.
+#
+# The whole RTMIN+1..15 band is ignored rather than just the two in use today.
+# Missing one costs an afternoon of diagnosis because the death is silent, while
+# ignoring a realtime signal waybar does not use costs nothing.
+exec_waybar() {
+    local conf="$1" style="$2"; shift 2
+    local s
+    for s in $(seq 1 15); do trap '' "RTMIN+$s"; done
+    echo "pocket4-waybar: starting waybar -c $conf -s $style"
+    exec waybar -c "$conf" -s "$style" "$@"
+}
+
+# `--layout <config> <style>` starts that layout directly and skips the probe
+# below. pocket4-display uses it when it bounces the bar across a rotation: it
+# already knows which layout it is switching TO (via --layout-for), and the
+# monitor may not have finished switching when the probe would read it.
+if [ "${1:-}" = "--layout" ]; then
+    [ -n "${3:-}" ] || { echo "pocket4-waybar: --layout requires a config and a style path" >&2; exit 2; }
+    conf="$2"
+    style="$3"
+    shift 3
+    exec_waybar "$conf" "$style" "$@"
+fi
+
+# The panel is NOT necessarily configured yet when this runs. Hyprland fires
+# hyprland.start — which execs this — before eDP-1 has its transform applied:
+# measured 0.6s between "Started Main service for Hyprland" and "Started
+# pocket4-waybar" on a cold boot, and `hyprctl monitors` can still answer with an
+# empty list that early. So poll until the panel actually reports a transform.
+#
+# This is worth the loop because the old one-shot probe failed INVISIBLY, leaving
+# a session with no bar and no way to find out why. Two silent deaths, both
+# before waybar was ever exec'd: an empty list made jq print `null`, and
+# `$(( null % 2 ))` then aborted under `set -u`; and if `hyprctl` itself fails it
+# prints to STDOUT, so jq got non-JSON, failed, and `pipefail` ended the script.
+# Neither left a trace, because a `uwsm app` child's stdout/stderr is journaled
+# NOWHERE — not the user journal, not the compositor unit, not hyprland.log.
+# Hence also the desktop notification below: at session start it is the only
+# channel that reaches you.
+#
+# eDP-1 is selected BY NAME rather than `.[0]`, because monitor order is not
+# guaranteed — with an external display attached, `.[0]` can be the HDMI output,
+# which would pick the bar layout from the wrong panel's orientation.
+transform=""
+panel_off=0
+attempt=0
+while [ "$attempt" -lt 50 ]; do
+    # Both commands run inside the `if` condition so that a not-ready compositor
+    # is retried rather than killing the script through `set -e` / `pipefail`.
+    # The window is bounded, and exhausting it is loud (below) — a transient
+    # not-ready state is tolerated, a genuine failure is never swallowed.
+    if monitors=$(hyprctl monitors -j) && printf '%s' "$monitors" | jq -e 'type == "array"' >/dev/null; then
+        transform=$(printf '%s' "$monitors" | jq -r 'map(select(.name == "eDP-1"))[0].transform // empty')
+        if [ -n "$transform" ]; then
+            break
+        fi
+    fi
+    # eDP-1 may be deliberately OFF — `display-mode external` turns the panel
+    # off so a fullscreen game sees a single output. There is then no panel
+    # orientation to read, and the only screen left is a landscape external, so
+    # waiting the full 10s and refusing to start the bar is exactly wrong: it
+    # left the session with NO bar on either screen.
+    #
+    # "Off on purpose" is distinguished from "not up yet" by eDP-1 being PRESENT
+    # in `monitors all` with disabled=true. At session start it is absent from
+    # that list entirely, which must keep retrying — the boot race this loop was
+    # written for is still handled.
+    if all=$(hyprctl monitors all -j) && printf '%s' "$all" | jq -e 'type == "array"' >/dev/null; then
+        if printf '%s' "$all" | jq -e 'any(.[]; .name == "eDP-1" and .disabled)' >/dev/null; then
+            panel_off=1
+            break
+        fi
+    fi
+    attempt=$(( attempt + 1 ))
+    sleep 0.2
+done
+
+if [ "$panel_off" -eq 1 ]; then
+    # External-only: the panel is off, so its orientation and tablet-mode scale
+    # are both irrelevant — the only screen left is a landscape external, which
+    # the one-row bar fits. Say so rather than logging a transform never read.
+    conf="$CONF_WIDE"
+    style="$STYLE_DEFAULT"
+    echo "pocket4-waybar: eDP-1 is disabled (external-only layout) after $attempt retr(y/ies); using the one-row bar"
+else
+    if [ -z "$transform" ]; then
+        echo "pocket4-waybar: eDP-1 reported no transform after 10s; not starting waybar" >&2
+        "$HOME/.mybin/notify" "waybar did not start---eDP-1 reported no transform after 10s (pocket4-waybar)"
+        exit 1
+    fi
+
+    read -r conf style <<< "$(layout_for "$transform")"
+
+    # Say which inputs produced which layout, so a session that comes up with the
+    # wrong bar (or none) is answerable from the journal alone. `attempt` matters:
+    # the transform is read the FIRST time the panel reports one, which at session
+    # start is not necessarily the one the config asks for.
+    echo "pocket4-waybar: eDP-1 transform=$transform width=$(logical_width_for "$transform") after $attempt retr(y/ies)"
+fi
+
+exec_waybar "$conf" "$style" "$@"

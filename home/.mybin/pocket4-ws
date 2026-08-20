@@ -1,0 +1,121 @@
+#!/bin/bash
+# pocket4-ws — clickable workspace buttons for waybar.
+#
+# WHY THIS EXISTS: waybar's built-in hyprland/workspaces module cannot switch
+# workspaces on this machine. Its click handler sends the LEGACY dispatch form
+# over Hyprland's IPC socket ("dispatch workspace 3"), and a Hyprland config
+# written in Lua rejects that outright:
+#
+#     $ printf 'dispatch workspace 3' | socat - UNIX-CONNECT:.../.socket.sock
+#     error: [string "return hl.dispatch(workspace 3)"]:1: ')' expected near '3'
+#
+# The Lua form works:  dispatch hl.dsp.focus({ workspace = "3" })  -> ok
+#
+# Verified at the raw socket, so it is not a hyprctl quirk — ANY tool sending
+# legacy dispatch fails here. Hyprland offers no legacy-compat shim (there is no
+# such option in /usr/share/hypr/stubs/hl.meta.lua). So the module is replaced
+# with custom buttons that dispatch in Lua.
+#
+# Usage:
+#   pocket4-ws go <n>            switch to workspace n
+#   pocket4-ws status <n>        waybar return-type=json state for workspace n
+#   pocket4-ws status special    ... for the scratchpad (special:magic)
+#   pocket4-ws toggle-special    show/hide the scratchpad (≙ Super+S)
+set -euo pipefail
+
+# The scratchpad's Hyprland name. Must match hyprland.lua's
+# `hl.dsp.workspace.toggle_special("magic")` bind — Hyprland prefixes the bare
+# name with "special:" everywhere it reports it.
+SPECIAL_NAME="special:magic"
+
+# nf-md-auto_fix (U+F0068). The workspace is literally called "magic", and a
+# wand reads as "the drawer" without competing with the numeric strip.
+SPECIAL_GLYPH="󰁨"
+
+# Per-workspace label colours, matching the roles in hyprland.lua's workspace
+# layout (2 Obsidian, 3 Terminal, 4/5 Code, 6 AI, 7 Slack, 8 Chats, 9 Calendar,
+# 10 Anki). Kept in step with the old hyprland/workspaces format-icons.
+colour_for() {
+    case "$1" in
+        2)  echo "#a855f7" ;;
+        3)  echo "#3b82f6" ;;
+        4|5) echo "#34d399" ;;
+        6)  echo "#22d3ee" ;;
+        7)  echo "#ef4444" ;;
+        8)  echo "#f59e0b" ;;
+        9)  echo "#a78bfa" ;;
+        10) echo "#14b8a6" ;;
+        *)  echo "" ;;
+    esac
+}
+
+case "${1:-}" in
+    go)
+        [ -n "${2:-}" ] || { echo "usage: $0 go <n>" >&2; exit 2; }
+        hyprctl dispatch "hl.dsp.focus({ workspace = \"$2\" })" >/dev/null
+        ;;
+    toggle-special)
+        hyprctl dispatch "hl.dsp.workspace.toggle_special(\"${SPECIAL_NAME#special:}\")" >/dev/null
+        ;;
+    status)
+        n="${2:-}"
+        [ -n "$n" ] || { echo "usage: $0 status <n|special>" >&2; exit 2; }
+
+        # The scratchpad cannot go through the numeric path below: special
+        # workspaces have NEGATIVE ids, so an `.id == $n` lookup can never match
+        # one, and `activeworkspace` never names them either (it always reports
+        # the normal workspace underneath). Both facts need their own queries.
+        if [ "$n" = special ]; then
+            # SHOWN-ness is a per-monitor property — this is the only place
+            # Hyprland reports that the special workspace is currently visible.
+            visible=$(hyprctl monitors -j | jq -r --arg n "$SPECIAL_NAME" \
+                'map(select(.specialWorkspace.name == $n)) | length')
+            # How many windows live in it, shown or not. A scratchpad that has
+            # never been used is absent from `workspaces` entirely, so `.[0]` is
+            # null there — `// 0` covers that legitimate state, not a bug.
+            windows=$(hyprctl workspaces -j | jq -r --arg n "$SPECIAL_NAME" \
+                'map(select(.name == $n)) | (.[0].windows // 0)')
+
+            if   [ "$visible" != "0" ]; then class=active
+            elif [ "$windows" -gt 0 ];  then class=occupied
+            else
+                # Empty AND hidden: emit empty text. Waybar HIDES a custom
+                # module whose text is empty, so the pill vanishes rather than
+                # sitting in the bar as a dead icon.
+                printf '{"text":"","class":"empty","tooltip":""}\n'
+                exit 0
+            fi
+
+            if [ "$windows" -gt 0 ]; then
+                text="$SPECIAL_GLYPH $windows"
+            else
+                text="$SPECIAL_GLYPH"
+            fi
+            printf '{"text":"%s","class":"%s","tooltip":"Scratchpad — %s window(s) (Super+S)"}\n' \
+                "$text" "$class" "$windows"
+            exit 0
+        fi
+
+        active=$(hyprctl activeworkspace -j | jq -r '.id')
+        # A workspace is "occupied" if it holds any windows.
+        occupied=$(hyprctl workspaces -j | jq -r --argjson n "$n" \
+            'map(select(.id == $n and .windows > 0)) | length')
+
+        if   [ "$active" = "$n" ];  then class=active
+        elif [ "$occupied" != "0" ]; then class=occupied
+        else                             class=empty
+        fi
+
+        col=$(colour_for "$n")
+        if [ -n "$col" ]; then
+            text="<span foreground='$col'>$n</span>"
+        else
+            text="$n"
+        fi
+        printf '{"text":"%s","class":"%s","tooltip":"Workspace %s"}\n' "$text" "$class" "$n"
+        ;;
+    *)
+        echo "usage: $0 {go <n>|status <n|special>|toggle-special}" >&2
+        exit 2
+        ;;
+esac

@@ -1,0 +1,122 @@
+/* pocket4 — TWO-ROW waybar layout for a NARROW screen.
+
+   Used whenever one row does not fit: portrait (either scale), and tablet mode
+   in EITHER orientation. pocket4-waybar owns that rule; see its `layout_for`.
+   The file used to be config-portrait.jsonc, chosen on orientation alone —
+   tablet-mode landscape kept the one-row layout and lost ~240px of right-hand
+   modules off the edge of the screen.
+
+   Waybar renders a TOP-LEVEL ARRAY as multiple bars, so this file is an array
+   of two bar objects rather than one object. Both include the shared module
+   definitions from modules.jsonc — the definitions are NOT duplicated here.
+
+   === THE WIDTH BUDGET IS THE WHOLE POINT OF THIS SPLIT ===
+
+   The worst case is portrait + tablet mode: the panel is 1600 physical px
+   across, which at scale 2.0 is 800 LOGICAL px — the narrowest surface this
+   machine ever presents. Every module has a MINIMUM width it cannot compress
+   below (CSS
+   min-width, icon sizes, padding), and if a row's minimum exceeds the screen
+   waybar commits a buffer wider than the surface Hyprland configured. Hyprland
+   then squeezes that buffer into the visible box, so the bar renders
+   HORIZONTALLY COMPRESSED **and taps land on the wrong module** — what you see
+   at x is really the button at x * (buffer / screen). That is the bug this
+   split exists to prevent; it is not cosmetic.
+
+   Measured minimums at the time of writing (logical px, `hyprctl layers`):
+
+     archicon 44   clock ~0*   sysinfo 85   workspaces 404 (469 with the
+     scratchpad pill)   brightness 46   volume 75   tray 117   apps 56
+     rotate 51   tabletmode 46   thermal 46   osk 46   display 59
+     idle_inhibitor 41   language 41
+     dictation: 126 idle, ~292 recording (REC + cleanup + cancel)
+
+   * the clock's label ellipsizes, so it contributes ~0 to the MINIMUM even
+     though it draws ~150px. Shrinkable modules are free here; fixed ones are not.
+
+   Totals for the split below, at 800px: row 1 = 719, row 2 = 631 idle / 733
+   recording. Both fit. The whole set is 1548 against 1600 (two rows), so there
+   is very little room — check the arithmetic before adding a module here.
+
+   KNOWN LIMIT, measured and deliberately not solved (2026-08-15). At 800px,
+   opening one of ROW 1's drawers still exceeds the screen for as long as it is
+   open, so the squeeze comes back while it is:
+
+     row 1 collapsed          686   ok
+     row 1 + sysinfo drawer   962   over by 162
+     row 1 + backlight slider 860   over by 60
+     row 1 + volume slider    850   over by 50
+
+   Row 2's drawers are fine (648 with the display drawer open, against 476
+   collapsed) — it has the slack, row 1 does not. No arrangement fixes it:
+   expanding sysinfo costs +276 for its four readouts, and neither row has that
+   much spare while holding everything else. Closing it would mean a materially
+   smaller slider or fewer readouts, which is a call to make deliberately rather
+   than by quietly shrinking things. */
+[
+  {
+    /* Named so style.css can target this bar specifically — waybar adds `name`
+       as a CSS class on the window, i.e. `window#waybar.narrow-top`. That is
+       what lets the narrow layout shrink a module without affecting the one-row
+       landscape bar or ideapad. */
+    "name": "narrow-top",
+    "layer": "top",
+    "position": "top",
+    "autohide": false,
+    "autohide-blocked": false,
+    "exclusive": true,
+    "passthrough": false,
+    "gtk-layer-shell": true,
+    /* ROW 1 — what you GLANCE at: the clock, the readouts, and where you are. */
+    "modules-left": [
+      "custom/archicon",
+      "clock",
+      "group/sysinfo"
+    ],
+    "modules-center": [
+      "group/workspaces"
+    ],
+    "modules-right": [
+      "group/brightness",
+      "group/volume"
+    ],
+    "include": ["{{ home }}/.config/waybar/modules.jsonc"]
+  },
+  {
+    "name": "narrow-bottom",
+    "layer": "top",
+    "position": "top",
+    "autohide": false,
+    "autohide-blocked": false,
+    "exclusive": true,
+    "passthrough": false,
+    "gtk-layer-shell": true,
+    /* ROW 2 — what you PRESS. Dictation lives here rather than beside the
+       workspaces (where the one-row layout puts it) for two reasons: row 1 has
+       no room for it, and it is the module whose width MOVES — idle it is one
+       ~126px button, recording it is three totalling ~292px. On row 1 that
+       shifted the whole workspace strip sideways mid-tap; here it grows into
+       empty space and nothing else moves. */
+    "modules-left": [
+      "group/apps",
+      "custom/mydictation-start",
+      "custom/mydictation",
+      "custom/mydictation-cleanup",
+      "custom/mydictation-cancel",
+      "custom/recording"
+    ],
+    "modules-center": [],
+    "modules-right": [
+      "custom/rotate",
+      "custom/tabletmode",
+      "custom/thermal",
+      "custom/osk",
+      "group/display",
+      "network",
+      "idle_inhibitor",
+      "hyprland/language",
+      "group/tray"
+    ],
+    "include": ["{{ home }}/.config/waybar/modules.jsonc"]
+  }
+]

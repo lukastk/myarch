@@ -1,0 +1,185 @@
+#!/bin/bash
+# redbull — keep this machine awake for N hours. The Hyprland twin of the
+# macOS ~/.mybin/redbull (home/.mybin/^macbook^redbull): same interface, a
+# different and much simpler mechanism.
+#
+# ONE PROCESS HOLDS EVERYTHING. `systemd-inhibit --mode=block` keeps its lock
+# only while its child lives, so `sleep <seconds>` IS the timeout and the
+# inhibit CANNOT outlive it. That removes every moving part the macOS version
+# needs: no watchdog to re-enable sleep, no pidfile, and no login-time safety
+# net (macOS `pmset -a disablesleep 1` is a PERSISTENT power setting that
+# survives reboots — a logind lock does not). Kill it, log out, or reboot and
+# the machine is back to normal. It needs no root either, unlike `pmset`.
+#
+# TWO LEVELS, because "don't suspend" and "don't blank the screen" are separate
+# asks that logind and hypridle honour through different locks:
+#
+#   default      --what=sleep:handle-lid-switch
+#     logind refuses suspend and ignores the lid. hypridle's timers still run,
+#     so the session still locks at 10 min and the screen still blanks at 15;
+#     only its 30-min `systemctl suspend` is refused. This mirrors macOS
+#     `pmset -a disablesleep 1`, under which display sleep still applies.
+#
+#   --screen-on  --what=idle:sleep:handle-lid-switch
+#     hypridle asks logind for `idle` block locks and drops every idle event
+#     while one is held ("Ignoring from onIdled()"), so NO listener fires at
+#     all: no lock, no blank, no suspend. Verified against hypridle 0.1.8,
+#     whose general:ignore_systemd_inhibit defaults to false. The macOS twin
+#     of this level is `caffeinate -d`.
+#
+# NO STATE FILES. The lock names itself `--who=redbull`, so redbull-off and
+# redbull-status find it in logind's own inhibitor list and read the duration
+# back off /proc/<pid>/cmdline. There is nothing on disk that can go stale.
+#
+# Related: `server-mode on` is the indefinite, boot-level version of the
+# DEFAULT level — a system unit holding the same sleep:handle-lid-switch lock
+# (see home/.mybin/^server_mode^server-mode). redbull is the time-boxed
+# user-level one, and the only one of the two that can keep the screen lit.
+#
+# Works over SSH: logind lives on the system bus, so none of this needs a
+# Wayland session in the environment.
+#
+# Usage: redbull [--bg] [--screen-on] [hours]  (default: 1)
+
+set -euo pipefail
+
+WHO=redbull
+
+usage() {
+	cat <<'EOF'
+Usage: redbull [--bg] [--screen-on] [hours]
+
+Keep this machine awake for N hours (default: 1) by holding a logind block
+inhibitor. The inhibit lasts exactly as long as the holding process, so it can
+never be left on by accident — a reboot or a kill ends it.
+
+By default, blocks and waits for a keypress or Ctrl-C to wake normally early.
+
+Options:
+  --bg          Run in background (non-blocking)
+  --screen-on   Also stop the screen locking and blanking (adds an idle lock,
+                which suppresses every hypridle timer)
+  -h, --help    Show this help
+
+Arguments:
+  hours   Duration in hours (default: 1). Fractions are allowed, e.g. 0.5
+
+Related commands:
+  redbull-off      End it early
+  redbull-status   Show what is currently inhibited, and by whom
+  server-mode on   The indefinite, boot-level version (no screen control)
+EOF
+}
+
+bg=false
+screen_on=false
+hours=1
+for arg in "$@"; do
+	case "$arg" in
+	--bg) bg=true ;;
+	--screen-on) screen_on=true ;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	-*)
+		echo "Unknown flag: $arg" >&2
+		exit 1
+		;;
+	*) hours="$arg" ;;
+	esac
+done
+
+if ! [[ "$hours" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+	echo "Not a duration in hours: $hours" >&2
+	exit 1
+fi
+
+seconds=$(awk -v h="$hours" 'BEGIN { printf "%d", h * 3600 }')
+if [ "$seconds" -lt 1 ]; then
+	echo "Duration rounds to less than a second: $hours hours" >&2
+	exit 1
+fi
+
+fmt_dur() {
+	local s=$1
+	if [ "$s" -ge 3600 ]; then
+		printf '%dh %02dm' $((s / 3600)) $((s % 3600 / 60))
+	elif [ "$s" -ge 60 ]; then
+		printf '%dm %02ds' $((s / 60)) $((s % 60))
+	else
+		printf '%ds' "$s"
+	fi
+}
+duration=$(fmt_dur "$seconds")
+
+if [ "$screen_on" = true ]; then
+	what=idle:sleep:handle-lid-switch
+	blurb="staying awake with the screen on"
+else
+	what=sleep:handle-lid-switch
+	blurb="staying awake (the screen may still lock and blank)"
+fi
+
+# The pids of any live redbull locks, one per line. Authority is logind's own
+# list, so there is no pidfile to disagree with reality.
+redbull_pids() {
+	systemd-inhibit --list --json=short |
+		jq -r --arg who "$WHO" '.[] | select(.who == $who and .mode == "block") | .pid'
+}
+
+# Replace whatever stay-awake is already running. The whole process GROUP goes:
+# `systemd-inhibit` runs the `sleep` as a child, and signalling the parent
+# alone would orphan it. Spawning under setsid below is what makes the pid a
+# process-group leader, so `kill -- -<pid>` reaches both.
+#
+# Then WAIT for logind to actually drop the old lock before taking a new one —
+# otherwise the confirmation poll further down could match the OUTGOING lock
+# and report success for a redbull that never started.
+for existing in $(redbull_pids); do
+	kill -TERM -- "-$existing"
+done
+for _ in $(seq 40); do
+	[ -z "$(redbull_pids)" ] && break
+	sleep 0.1
+done
+if [ -n "$(redbull_pids)" ]; then
+	echo "A previous redbull lock is still held — see 'systemd-inhibit --list'." >&2
+	exit 1
+fi
+
+until=$(date -d "+$seconds seconds" '+%H:%M')
+setsid systemd-inhibit \
+	--what="$what" \
+	--who="$WHO" \
+	--why="redbull: $blurb until $until" \
+	--mode=block \
+	sleep "$seconds" </dev/null >/dev/null 2>&1 &
+
+# Confirm logind actually granted the lock rather than assuming it did — a
+# refused or crashed inhibitor would otherwise leave this printing a cheerful
+# message about a machine that is free to suspend.
+pid=""
+for _ in $(seq 40); do
+	pids=$(redbull_pids)
+	pid=${pids%%$'\n'*}
+	[ -n "$pid" ] && break
+	sleep 0.1
+done
+if [ -z "$pid" ]; then
+	echo "Failed to take the inhibitor lock — check 'systemd-inhibit --list'." >&2
+	exit 1
+fi
+
+echo "redbull ON for $duration (until $until) — $blurb. [pid $pid]"
+
+if [ "$bg" = true ]; then
+	echo "Run 'redbull-off' to end it early."
+else
+	echo "Press any key or Ctrl-C to end early, or wait $duration. (Use --bg for non-blocking)"
+	trap 'redbull-off; exit' INT TERM HUP
+	# Time out the read after the full duration so this exits on its own once
+	# the lock has expired, instead of hanging for a key nobody will press.
+	read -rsn1 -t "$seconds" || true
+	redbull-off
+fi

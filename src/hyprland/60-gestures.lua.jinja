@@ -1,0 +1,150 @@
+------------------
+---- GESTURES ----
+------------------
+
+-- Three-finger swipes, mirroring the mac trackpad Spaces gestures: left/right
+-- walks the workspace row, up opens the overview (≙ Mission Control).
+--
+-- THE GESTURE SOURCE IS PER-MACHINE, and the hardware forces that, not taste.
+-- Hyprland's own gesture system is fed exclusively by libinput POINTER gesture
+-- events, which only a real multitouch trackpad emits:
+--   - ideapad has one, so it binds hl.gesture directly.
+--   - pocket4 does NOT. Its "touchpad" (HAILUCK CO.,LTD USB KEYBOARD Mouse)
+--     enumerates as a plain relative HID mouse — EV=17, REL=1943, and no ABS
+--     axes at all — so libinput has nothing to synthesise a swipe from, and
+--     hl.gesture can NEVER fire there however it is configured. The touchscreen
+--     (NVTK0603; ABS_MT_SLOT max 9, i.e. 10 simultaneous contacts) is the only
+--     multi-finger surface the machine has, and Hyprland's one native touch
+--     gesture — gestures:workspace_swipe_touch — is a ONE-finger drag that must
+--     start within gaps_out+border_size of a screen edge, which is a different
+--     gesture entirely. So pocket4 goes through hyprgrass, which hooks
+--     Hyprland's touch pipeline and re-exposes the built-in gesture actions for
+--     touch.
+--
+-- Both plugins come from hyprpm (Myarch install.py plugin integration) and are
+-- loaded by the `hyprpm reload` in the autostart above.
+--
+-- The `~= nil` guards are the idiom the Hyprland wiki prescribes for plugin
+-- config (Plugins/Using-Plugins): the config is parsed once BEFORE plugins are
+-- loaded and again afterwards, so on the first pass these namespaces genuinely
+-- do not exist yet. They are not papering over a failed plugin — `hyprpm
+-- reload` raises its own Hyprland notification on any load warning or error,
+-- with or without -n, so a plugin that fails to load says so out loud.
+
+-- The overview itself. hyprexpo is not Hyprland core, and the original plugin
+-- was RETIRED from hyprwm/hyprland-plugins; this is the maintained fork, which
+-- tracks Hyprland releases tag-for-tag.
+if hl.plugin.hyprexpo ~= nil then
+    hl.config({
+        plugin = {
+            hyprexpo = {
+                -- DYNAMIC grid: enumerate the workspaces that actually exist,
+                -- rather than hyprexpo's default "sequential window" mode.
+                --
+                -- This is not a cosmetic preference, it fixes two real faults.
+                -- The default mode (`dynamic_grid = 0`) fills the grid with a
+                -- RUNNING RANGE of workspace IDs positioned by
+                -- `workspace_method`, and labels each tile with its GRID
+                -- POSITION rather than its workspace. With the old
+                -- `workspace_method = "center current"` the range slid around
+                -- as you moved: standing on workspace 7 the grid started at 4,
+                -- so workspace 3 was **not in the overview at all**, and the
+                -- tile labelled "4" was really workspace 7. An overview you
+                -- cannot reach half your workspaces from is worse than no
+                -- overview, because it looks complete. (The labelling half is
+                -- upstream issue #77.) Dynamic mode enumerates real workspaces
+                -- and labels them with their real IDs, so both faults go.
+                dynamic_grid         = 1,
+                -- Show the contiguous range 1..highest rather than only the
+                -- workspaces that happen to exist, so a given space keeps the
+                -- same slot from one open to the next: an empty workspace 5
+                -- renders as a blank tile instead of letting 6..10 all shift
+                -- left. Muscle memory is the point of a fixed workspace row.
+                fill_gaps            = 1,
+                -- NOTE: `columns` and `workspace_method` are deliberately
+                -- absent — dynamic mode ignores both. It derives the shape
+                -- itself as ceil(sqrt(n)) columns, so the grid is 3x3 at nine
+                -- workspaces and 4x3 once workspace 10 exists. Setting
+                -- `columns` here would read as control it does not have.
+                gaps_in              = 5,
+                gaps_out             = 10,
+                bg_col               = "rgb(1a1a1a)",
+                -- Workspaces are numerically named (waybar carries the display
+                -- names), so the label is the workspace NUMBER — under
+                -- dynamic_grid it is the real ID, which is what makes the grid
+                -- readable at a glance.
+                show_workspace_names = 1,
+                label_pos            = "top_right",
+                label_size           = 24,
+                cancel_key           = "escape",
+{% if 'pocket4' in targets %}
+                -- Off on the touchscreen: a tap always drifts a pixel or two,
+                -- and drag-drop reads that as "move this window to another
+                -- workspace" — i.e. every attempt to SELECT a space would
+                -- instead rearrange it.
+                drag_drop_enable     = 0,
+{% else %}
+                drag_drop_enable     = 1,
+{% endif %}
+            },
+        },
+    })
+end
+
+{% if 'pocket4' in targets %}
+-- Touch gestures (hyprgrass). `gesture` takes Hyprland's built-in actions, so
+-- "workspace" here is the same 1:1 animated swipe the trackpad drives on
+-- ideapad — the workspace tracks your fingers rather than jumping at the end.
+if hl.plugin.hyprgrass ~= nil then
+    hl.config({
+        plugin = {
+            hyprgrass = {
+                -- hyprgrass's default is tuned for phone-sized panels and is
+                -- too low here; 4.0 is what its own docs recommend for tablet
+                -- screens. Raise it if three fingers on an 8.8" panel feels
+                -- like it needs too long a travel.
+                sensitivity = 4.0,
+            },
+        },
+    })
+
+    hl.plugin.hyprgrass.gesture({
+        pattern = { kind = "swipe", fingers = 3, direction = "horizontal" },
+        action  = "workspace",
+    })
+
+    -- `bind` rather than `gesture`: the overview is a plugin dispatcher, not
+    -- one of Hyprland's built-in gesture actions, and only `bind` takes a lua
+    -- function. hyprexpo is dereferenced INSIDE the lambda, so it is looked up
+    -- when you swipe (plugins long since loaded) rather than at parse time.
+    hl.plugin.hyprgrass.bind({
+        pattern = { kind = "swipe", fingers = 3, direction = "up" },
+        action  = function() hl.plugin.hyprexpo.expo("toggle") end,
+    })
+
+    -- FOUR fingers up: show the on-screen keyboard, again to dismiss it. Four
+    -- rather than three so it cannot be confused with the overview swipe, and
+    -- the panel has room for it (the digitizer reports 10 contacts).
+    --
+    -- This is a genuine toggle of what is on screen, which it only became once
+    -- the keyboard stopped running as an --auto daemon: while a resident
+    -- process could be up-but-hidden, "toggle" from cold merely started that
+    -- process and the first swipe would have LOOKED like it did nothing. See
+    -- the header of pocket4-osk.
+    --
+    -- Absolute path, not a bare name: Hyprland spawns binds from the login
+    -- environment, which does not have ~/.mybin on PATH.
+    hl.plugin.hyprgrass.bind({
+        pattern = { kind = "swipe", fingers = 4, direction = "up" },
+        action  = hl.dsp.exec_cmd("{{ home }}/.mybin/pocket4-osk toggle"),
+    })
+end
+{% else %}
+-- Trackpad gestures (native libinput pointer gestures).
+hl.gesture({ fingers = 3, direction = "horizontal", action = "workspace" })
+hl.gesture({
+    fingers   = 3,
+    direction = "up",
+    action    = function() hl.plugin.hyprexpo.expo("toggle") end,
+})
+{% endif %}

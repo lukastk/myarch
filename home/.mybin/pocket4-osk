@@ -1,0 +1,99 @@
+#!/bin/bash
+# pocket4-osk — the on-screen keyboard for the GPD Pocket 4. PURELY MANUAL: it
+# appears when you ask for it and stays until you dismiss it. Nothing shows or
+# hides it on your behalf.
+#
+# NO DAEMON, AND NO --auto (changed 2026-07-30; it used to have both).
+#
+# wvkbd used to run permanently as `--auto --hidden`, where --auto shows and
+# hides the keyboard itself off Wayland text-input focus. Two things were wrong
+# with that, and they are independent:
+#
+#   1. TWO CONTROLLERS, ONE KEYBOARD. --auto and the manual toggle both drove
+#      visibility with nothing arbitrating between them. Force the keyboard up
+#      and the next focus change pulled it straight back down; meanwhile it
+#      surfaced on its own for any text focus, including merely opening a
+#      terminal. Unpredictable in both directions, which is the "janky" part.
+#
+#   2. THREE STATES WHERE THERE SHOULD BE TWO. "daemon running" and "keyboard
+#      visible" were different things, so the waybar button and `get` could only
+#      report the former — the icon read "on" with nothing on screen. Worse, a
+#      toggle from cold merely STARTED the daemon (hidden), so the first press
+#      did nothing visible and you had to press a second time.
+#
+# Dropping --auto removes (1). Dropping the resident process removes (2): with
+# spawn-to-show and kill-to-hide, running IS visible, so every readout is honest
+# and a toggle always toggles the thing you can see.
+#
+# The daemon only ever bought instant show/hide, and that is not worth the
+# ambiguity: launch-to-visible measured 17-24 ms on this machine over three
+# runs, i.e. below the threshold where anything reads as delayed.
+#
+# Typing is unaffected by losing --auto: wvkbd injects keys over
+# zwp_virtual_keyboard_v1, a different protocol from the zwp_input_method_v2
+# that --auto used only to decide when to show itself.
+#
+# PACKAGE NOTE: this needs `wvkbd-git`, NOT the released `wvkbd`. The two
+# conflict on /usr/share/man/man1/wvkbd.1.gz, so the release package must be
+# removed before the git one installs, and the -git package builds
+# `wvkbd-deskintl`, not `wvkbd-mobintl`.
+#
+# Usage: pocket4-osk {show|hide|toggle|get|status}
+set -euo pipefail
+
+BIN=wvkbd-deskintl
+
+# wvkbd takes the two orientations SEPARATELY: -H applies in portrait, -L in
+# landscape. Only -L was set before, so rotating the panel with `por` left the
+# keyboard at wvkbd's built-in default height rather than anything chosen.
+HEIGHT_LANDSCAPE=340
+HEIGHT_PORTRAIT=420
+
+# The bar's keyboard button is signal-driven rather than polled, so poke it the
+# moment the state changes. RTMIN+8 (workspace buttons) and RTMIN+9 (thermal)
+# are already taken. Sending this can never kill a still-starting bar: the whole
+# RTMIN+1..15 band is set to SIG_IGN before waybar's execve by pocket4-waybar —
+# see the long comment there for why that protection is load-bearing.
+WAYBAR_SIGNAL=10
+refresh() { pkill -RTMIN+$WAYBAR_SIGNAL -x waybar 2>/dev/null || true; }
+
+is_up() { pgrep -x "$BIN" >/dev/null 2>&1; }
+
+show() {
+    is_up && return 0
+    setsid "$BIN" -H "$HEIGHT_PORTRAIT" -L "$HEIGHT_LANDSCAPE" >/dev/null 2>&1 < /dev/null &
+    # Wait for the process to actually exist before poking the bar. waybar
+    # re-runs `status` as soon as the signal lands, and without this it can beat
+    # the fork and latch "off" while the keyboard is coming up.
+    for _ in $(seq 1 50); do is_up && break; sleep 0.01; done
+    refresh
+}
+
+# NOTE: always match with `pkill -x` (exact process name), never `pkill -f`.
+# `pkill -f wvkbd` matches any command line CONTAINING "wvkbd" — including the
+# very shell running this script, or an ssh command that mentions it. That
+# killed a live session during development.
+hide() {
+    pkill -x "$BIN" 2>/dev/null || true
+    # Same race in reverse: wait for it to be gone so the bar does not latch
+    # "on" from a process that is already on its way out.
+    for _ in $(seq 1 50); do is_up || break; sleep 0.01; done
+    refresh
+}
+
+case "${1:-toggle}" in
+    show)   show ;;
+    hide)   hide ;;
+    toggle) if is_up; then hide; else show; fi ;;
+    get)    if is_up; then echo on; else echo off; fi ;;
+    status)
+        # waybar `return-type: json`. Now that running IS visible, this reports
+        # what is actually on screen rather than whether a daemon is alive.
+        if is_up; then
+            printf '{"text":"\xf3\xb0\x8c\x8c","class":"on","tooltip":"Keyboard up — tap to dismiss"}\n'
+        else
+            printf '{"text":"\xf3\xb0\x8c\x8c","class":"off","tooltip":"Keyboard hidden — tap to show"}\n'
+        fi
+        ;;
+    *) echo "usage: $0 {show|hide|toggle|get|status}" >&2; exit 2 ;;
+esac

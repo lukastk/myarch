@@ -1,0 +1,83 @@
+{
+  "layer": "top",
+  "position": "top",
+{% if 'pocket4' in targets %}
+  /* No autohide on pocket4: revealing an autohidden bar wants a HOVER, which a
+     fingertip does not really do — it makes the bar awkward to reach by touch,
+     which is the primary input here. */
+  "autohide": false,
+{% else %}
+  "autohide": true,
+{% endif %}
+  "autohide-blocked": false,
+  "exclusive": true,
+  "passthrough": false,
+  "gtk-layer-shell": true,
+  /* === Modules Order === */
+  "modules-left": [
+    "custom/archicon",
+    "clock",
+{% if 'pocket4' in targets %}
+    /* The readouts collapse into one tappable icon — a 1600px-wide panel has
+       no room for six of them side by side. Clock stays out, it is the one
+       you actually glance at. */
+    "group/sysinfo"
+{% else %}
+    "cpu",
+    "memory",
+    "disk",
+    "temperature",
+    "battery"
+{% endif %}
+  ],
+  "modules-center": [
+    // Dictation sits immediately left of the workspaces, in the centre where it
+    // is easy to hit without looking. The start button shows only while idle
+    // and cancel/cleanup only while recording, so exactly one of the two
+    // groups is ever on the bar and the workspaces do not shift far. The REC
+    // indicator doubles as the finish button, so there is no separate one.
+    "custom/mydictation-start",
+    "custom/mydictation",
+    "custom/mydictation-cleanup",
+    "custom/mydictation-cancel",
+    "custom/recording",
+{% if 'pocket4' in targets %}
+    "group/workspaces"
+{% else %}
+    "hyprland/workspaces"
+{% endif %}
+  ],
+  "modules-right": [
+{% if 'pocket4' in targets %}
+    "group/apps",
+{% else %}
+    "wlr/taskbar",
+{% endif %}
+{% if 'pocket4' in targets %}
+    // pocket4 touch controls. There is no hardware tablet-mode switch on this
+    // machine (only SW_LID, and folding the keyboard back does not even change
+    // it), and the accelerometer cannot tell "pad held upright" from "laptop
+    // with screen open" — so these are deliberately manual buttons.
+    "custom/thermal",
+    "custom/rotate",
+    "custom/tabletmode",
+    "custom/osk",
+    "group/display",
+{% endif %}
+    "idle_inhibitor",
+{% if 'pocket4' in targets %}
+    "group/brightness",
+    "group/volume",
+{% else %}
+    "pulseaudio/slider",
+    "pulseaudio",
+{% endif %}
+    "network",
+    "hyprland/language",
+    "group/tray"
+  ],
+  /* Module DEFINITIONS live in modules.jsonc so that this bar layout and the
+     pocket4 two-row narrow layout (config-narrow.jsonc) can share them
+     instead of duplicating ~150 lines. */
+  "include": ["{{ home }}/.config/waybar/modules.jsonc"]
+}

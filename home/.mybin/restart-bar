@@ -1,0 +1,51 @@
+#!/bin/bash
+# restart-bar — bounce waybar. THE one implementation, for every caller.
+#
+# WHY A RESTART IS THE ONLY REMEDY. Waybar has no IPC to rebuild its surfaces,
+# and it dies or half-dies in several ways that all look identical from the
+# outside — a bar-shaped hole in the session:
+#
+#   - Its output is removed and re-added (a display-mode layout change): the
+#     process stays alive but its layer surfaces are gone, so you get a running
+#     waybar and no bars on any screen, plus a trail of defunct children.
+#   - The monitor SCALE changes underneath it (pocket4-tablet-mode): waybar does
+#     not reflow, so it keeps the logical width of the OLD scale. On pocket4 the
+#     restart also re-picks the layout, since the launcher chooses one-row vs
+#     two-row from the width the new scale leaves.
+#   - A device it watches disappears: with no explicit "bat" the battery module
+#     watches EVERY /sys/class/power_supply entry, so unplugging a DualSense
+#     throws an uncaught std::runtime_error out of the inotify watch and
+#     terminates the process outright (observed 2026-08-06 20:02:21). The battery
+#     module is pinned now, but the general shape of that failure remains.
+#
+# Callers: display-mode (after every layout change), pocket4-tablet-mode (after
+# a scale change), and the Super+CTRL+B keybind for the times something killed
+# the bar and you just want it back.
+set -euo pipefail
+
+# `pkill -x` matches the EXACT process name. Never `pkill -f waybar`, which
+# matches any command line containing the word — including this script's own,
+# and including a caller that invoked it by full path.
+if pgrep -x waybar >/dev/null; then pkill -x waybar; fi
+
+# Let the compositor reap the surfaces before the replacement asks for its own;
+# starting instantly races the old process's teardown and can leave the new bar
+# with no layer surface, which is the very failure this script exists to undo.
+sleep 0.3
+
+# PER-MACHINE DISPATCH, not a fallback: exactly one of these two is correct on
+# any given box, and which one is decided by whether the launcher exists.
+#
+# pocket4 has its own launcher because it needs two things plain waybar cannot
+# do for itself — pick the single-row or two-row layout from the width the
+# CURRENT transform and tablet-mode scale leave (see pocket4-waybar's
+# `layout_for`), and set the RTMIN band to SIG_IGN before exec (without which a
+# pocket4-ws-watch poke landing during startup kills the bar silently, since the
+# default action for a realtime signal is TERMINATE). Everywhere else — ideapad
+# — plain waybar is the session's own autostart command.
+LAUNCHER="$HOME/.mybin/pocket4-waybar"
+if [ -x "$LAUNCHER" ]; then
+    setsid uwsm app -- "$LAUNCHER" >/dev/null 2>&1 </dev/null &
+else
+    setsid uwsm app -- waybar >/dev/null 2>&1 </dev/null &
+fi

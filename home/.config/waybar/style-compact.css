@@ -1,0 +1,88 @@
+/* Pocket 4 portrait+tablet metrics. At scale 2.0 these smaller logical targets
+ * remain at least as large physically as the normal bar at scale 1.6. */
+@import url("style.css");
+
+* { font-size: 15px; }
+
+#custom-archicon,
+#clock,
+#cpu,
+#memory,
+#disk,
+#temperature,
+#battery,
+#idle_inhibitor,
+#pulseaudio,
+#backlight,
+#network,
+#language,
+#custom-apps-handle,
+#custom-tray-handle,
+#custom-display-handle,
+#custom-scaleup,
+#custom-scaledown,
+#custom-gaps,
+#custom-rotate,
+#custom-flip,
+#custom-tabletmode,
+#custom-osk,
+#custom-thermal,
+#custom-recording {
+  min-height: 34px;
+  padding-left: 7px;
+  padding-right: 7px;
+}
+
+#custom-rotate,
+#custom-tabletmode,
+#custom-osk,
+#custom-thermal,
+#custom-display-handle,
+#custom-flip,
+#custom-scaleup,
+#custom-scaledown,
+#custom-gaps {
+  min-width: 24px;
+  padding-left: 8px;
+  padding-right: 8px;
+  font-size: 18px;
+}
+
+#custom-ws1,
+#custom-ws2,
+#custom-ws3,
+#custom-ws4,
+#custom-ws5,
+#custom-ws6,
+#custom-ws7,
+#custom-ws8,
+#custom-ws9,
+#custom-ws10,
+#custom-wsspecial {
+  min-height: 34px;
+  padding-left: 6px;
+  padding-right: 6px;
+  font-size: 16px;
+}
+
+#backlight-slider,
+#pulseaudio-slider { min-width: 145px; }
+
+window#waybar.narrow-bottom #custom-mydictation-start,
+window#waybar.narrow-bottom #custom-mydictation-cleanup,
+window#waybar.narrow-bottom #custom-mydictation-cancel {
+  min-width: 48px;
+  min-height: 32px;
+  padding: 0 7px;
+  font-size: 14px;
+}
+window#waybar.narrow-bottom #custom-mydictation-start.hidden,
+window#waybar.narrow-bottom #custom-mydictation-cleanup.hidden,
+window#waybar.narrow-bottom #custom-mydictation-cancel.hidden {
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+}
+
+#tray { padding: 0 4px; }

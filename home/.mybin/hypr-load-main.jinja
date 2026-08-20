@@ -1,0 +1,90 @@
+#!/bin/bash
+# hypr-load-main — one-shot layout of the main workspaces, the Hyprland twin
+# of `spacework stack load main` on the macbook (aliased `ii`/`ri`, see
+# home/.config/myarch/shell/myarch.zsh):
+#   ws 2 Obsidian · ws 3 kitty · ws 6 ChatGPT|Claude · ws 7 Slack ·
+#   ws 8 WhatsApp|Signal · ws 9 GNOME Calendar · ws 10 Anki
+# Apps with hyprland.conf windowrules are routed automatically; kitty has no
+# rule (terminals spawn everywhere), so it is placed explicitly. Launches are
+# pgrep-guarded, so re-running only starts what's missing (≙ `ri`).
+
+set -uo pipefail
+
+# --- Session environment bootstrap -----------------------------------------
+# `ii` is often run from shells that lack the graphical session environment:
+# sesh work-server tmux panes (that server starts at boot with no session env),
+# ssh, agent shells. uwsm app passes the CALLER's environment through
+# unchanged, and without XDG_SESSION_TYPE/WAYLAND_DISPLAY/DISPLAY the launches
+# go wrong in ways that look random: Chromium/Electron fall back to X11 —
+# cold-launched brave --app windows then come up XWayland with the generic
+# `Brave-browser` class (no pin windowrule matches), floating (X11 geometry
+# restore), on whatever workspace has focus — and slack/signal abort on
+# startup ("Missing X server or $DISPLAY", coredump). Pull the canonical
+# session vars from the systemd user manager environment (populated by
+# uwsm/Hyprland at session start) so the launches are identical no matter
+# where `ii` is invoked from. Values match the caller's when run inside the
+# session, so importing unconditionally is safe.
+while IFS='=' read -r k v; do
+  export "$k=$v"
+done < <(systemctl --user show-environment | grep -E '^(WAYLAND_DISPLAY|DISPLAY|XDG_RUNTIME_DIR|XDG_SESSION_TYPE|XDG_CURRENT_DESKTOP|DBUS_SESSION_BUS_ADDRESS|HYPRLAND_INSTANCE_SIGNATURE)=')
+
+if [ -z "${WAYLAND_DISPLAY:-}" ] || [ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+  echo "hypr-load-main: no Hyprland session environment found in the systemd" >&2
+  echo "user manager env — is a graphical session running?" >&2
+  exit 1
+fi
+launch_app() {
+  local pattern="$1"
+  shift
+  if pgrep -f "$pattern" >/dev/null 2>&1; then
+    return 0
+  fi
+  # setsid + full redirection so the launched app is genuinely detached. Without
+  # this the children inherit the calling terminal's stdout/stderr, so the shell
+  # does not get its prompt back until every app exits — `ii` appears to hang.
+  setsid uwsm app -- "$@" >/dev/null 2>&1 < /dev/null &
+  # Stagger launches so paired windows (left|right) tile in a stable order.
+  sleep 0.5
+}
+
+# Workspace 2: Obsidian — the APP by explicit path: the official Obsidian CLI
+# (a 14KB remote-control binary) lives at ~/.local/bin/obsidian on pocket4 and
+# shadows the app in PATH; with the app not running it just prints "unable to
+# find Obsidian" and exits 0, so `obsidian` would silently launch nothing.
+launch_app '[o]bsidian' /usr/bin/obsidian
+
+# Workspace 6: AI — ChatGPT left, Claude right (launch order = tile order)
+launch_app 'app=https://chatgpt.com' "$HOME/.mybin/webapp-chatgpt"
+launch_app 'app=https://claude.ai' "$HOME/.mybin/webapp-claude"
+
+# Workspace 7: Slack
+launch_app '[s]lack' slack
+
+# Workspace 8: Chats — WhatsApp left, Signal right
+launch_app 'app=https://web.whatsapp.com' "$HOME/.mybin/webapp-whatsapp"
+launch_app '[s]ignal-desktop' signal-desktop
+
+# Workspace 9: Calendar
+launch_app '[g]nome-calendar' gnome-calendar
+
+# Workspace 10: Anki — uwsm resolves the command to its full path, so the
+# cmdline is /usr/local/bin/anki; the $ anchor skips Anki's QtWebEngine
+# children (they carry args).
+launch_app '[a]nki$' anki
+
+# Workspace 3: Terminal — kitty, placed explicitly (no windowrule).
+# hyprctl dispatch takes Lua expressions (the hyprland config is hyprland.lua).
+{% if 'pocket4' in targets %}
+# pocket4 uses foot (kitty ignores touchscreen taps inside TUIs — see
+# hyprland.lua.jinja). Note the window CLASS must match the binary.
+if ! hyprctl clients -j | jq -e '.[] | select(.class == "foot" and .workspace.id == 3)' >/dev/null 2>&1; then
+  hyprctl dispatch 'hl.dsp.exec_cmd("foot", { workspace = "3 silent" })' >/dev/null
+fi
+{% else %}
+if ! hyprctl clients -j | jq -e '.[] | select(.class == "kitty" and .workspace.id == 3)' >/dev/null 2>&1; then
+  hyprctl dispatch 'hl.dsp.exec_cmd("kitty", { workspace = "3 silent" })' >/dev/null
+fi
+{% endif %}
+
+# Land on workspace 1, like a fresh spacework stack load
+hyprctl dispatch 'hl.dsp.focus({ workspace = "1" })' >/dev/null

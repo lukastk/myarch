@@ -1,0 +1,5 @@
+#!/bin/bash
+# WhatsApp Web as a Brave app window (≙ the WhatsApp app pinned left on the
+# macbook Chats space; WhatsApp has no native Linux app). Routed to the Chats
+# workspace by the hyprland windowrules.
+exec brave --app=https://web.whatsapp.com

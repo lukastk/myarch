@@ -1,0 +1,31 @@
+#!/bin/bash
+# redbull-off — end a `redbull` stay-awake early.
+#
+# Releasing the lock is all there is to it: unlike the macOS twin there is no
+# persistent power setting to put back and no display-sleep value to restore,
+# because `redbull` never changed any settings — it only held a logind
+# inhibitor. See ~/.mybin/redbull.
+#
+# Note this does NOT touch `server-mode`, which holds its own indefinite
+# sleep lock as a system service. Use `server-mode off` for that.
+
+set -euo pipefail
+
+WHO=redbull
+
+pids=$(systemd-inhibit --list --json=short |
+	jq -r --arg who "$WHO" '.[] | select(.who == $who and .mode == "block") | .pid')
+
+if [ -z "$pids" ]; then
+	echo "redbull is not active."
+	exit 0
+fi
+
+# The process group, not the process: `systemd-inhibit` runs `sleep` as a
+# child, and `redbull` spawns it under setsid precisely so that the pid logind
+# reports is also the group leader.
+for pid in $pids; do
+	kill -TERM -- "-$pid"
+done
+
+echo "redbull OFF — normal sleep and idle behaviour restored."

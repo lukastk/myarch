@@ -1,0 +1,4 @@
+#!/bin/bash
+# ChatGPT as a Brave app window (≙ the ChatGPT desktop app pinned left on the
+# macbook AI space). Routed to the AI workspace by the hyprland windowrules.
+exec brave --app=https://chatgpt.com

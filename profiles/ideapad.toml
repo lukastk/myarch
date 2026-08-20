@@ -1,0 +1,13 @@
+name = "ideapad"
+terminal = "kitty"
+battery = "BAT1"
+touchscreen = false
+mydictation = true
+
+[plugins]
+hyprexpo = true
+hyprgrass = false
+
+[external]
+mydictation_source = "~/mysetup/mydictation"
+wallpaper_directory = "~/Pictures/wallpapers"

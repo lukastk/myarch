@@ -1,0 +1,45 @@
+# chord	action
+Super+Q / Super+Enter	Open terminal
+Super+T	Open floating terminal
+Super+E	Open file manager
+Super+R	Open Myarch menu
+Super+Alt+Space	Open applications
+Super+C	Close window
+Super+M	End Hyprland session
+Super+N	Network panel
+Super+Shift+N	Bluetooth panel
+Super+Arrow	Focus window
+Super+Shift+Arrow	Move window
+Super+[ / Super+]	Focus previous / next monitor
+Super+Shift+[ / Super+Shift+]	Move window to previous / next monitor
+Super+- / Super+=	Resize split horizontally
+Super+Shift+- / Super+Shift+=	Resize split vertically
+Super+F	Maximize in layout
+Super+Shift+F	True fullscreen
+Super+Shift+V	Toggle floating
+Super+Z	Center focused window as a float
+Super+1…5	Focus workspace 1…5
+Super+Ctrl+1…5	Focus workspace 6…10
+Super+AltGr+1…5	Focus workspace 11…15
+Add Shift to a workspace chord	Move focused window and follow
+Super+, / Super+.	Previous / next workspace
+Super+W / Super+Shift+W	Choose workspace / move window
+Super+G	Live workspace overview
+Super+S	Toggle scratchpad
+Super+Alt+S	Move window to scratchpad
+Super+D	Hold to dictate; tap to latch
+Super+Shift+D	Dictate with cleanup
+Super+Alt+D	Toggle cleanup for recording in progress
+Super+Ctrl+D	Dictation settings
+Super+Escape	Cancel dictation
+Super+V	Clipboard history
+Print	Screenshot focused monitor
+Super+Shift+S	Screenshot region
+Super+Ctrl+S	Capture menu
+Super+B	Next wallpaper
+Super+Shift+B	Wallpaper picker
+Super+Ctrl+B	Restart bar
+Super+O	Cycle monitor layout
+Super+Shift+O	Toggle mirroring
+Super+Shift+P	Pause / black screen for a duration
+XF86 volume / brightness / media	Hardware controls

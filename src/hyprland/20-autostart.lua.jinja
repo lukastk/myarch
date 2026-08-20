@@ -1,0 +1,49 @@
+
+-------------------
+---- AUTOSTART ----
+-------------------
+
+hl.on("hyprland.start", function()
+    -- Load the hyprpm plugins (hyprexpo everywhere, plus hyprgrass on pocket4
+    -- — see GESTURES). Hyprland does NOT load enabled plugins by itself, so
+    -- without this the gesture/overview config below silently no-ops. Loading
+    -- a plugin re-parses the config, which is what makes the `hl.plugin.*`
+    -- blocks down there take effect on the second pass. Not `uwsm app --`:
+    -- this is session plumbing, not an application. -n notifies on success;
+    -- warnings and errors notify regardless of the flag.
+    hl.exec_cmd("hyprpm reload -n")
+{% if 'pocket4' in targets %}
+    -- pocket4-waybar picks the single-row or two-row layout from the CURRENT
+    -- monitor transform. Starting plain `waybar` would always load the
+    -- landscape config, even when the session begins in portrait.
+    hl.exec_cmd("uwsm app -- {{ home }}/.mybin/pocket4-waybar")
+    -- Refreshes the custom workspace buttons on Hyprland events (they are
+    -- signal-driven rather than polled — see pocket4-ws-watch).
+    hl.exec_cmd("uwsm app -- {{ home }}/.mybin/pocket4-ws-watch")
+{% else %}
+    hl.exec_cmd("uwsm app -- waybar")
+{% endif %}
+    hl.exec_cmd("uwsm app -- hyprpaper")
+    -- hyprpaper is started with no wallpaper of its own; this picks one from
+    -- ~/Pictures/wallpapers (the `wallpapers` target's clone) and rotates every
+    -- 20 minutes. It waits for hyprpaper's IPC socket itself, so the order of
+    -- these two lines is not load-bearing.
+    hl.exec_cmd("uwsm app -- {{ home }}/.mybin/wallpaper daemon")
+    -- The gamma layer the brightness keys dim into once the backlight is at its
+    -- floor (see ~/.mybin/brightness). --identity so it changes NOTHING until
+    -- asked: without it hyprsunset applies its default 6000K colour shift, and
+    -- this is here for luminance, not for a blue-light filter.
+    hl.exec_cmd("uwsm app -- hyprsunset --identity")
+    hl.exec_cmd("uwsm app -- mako")
+    hl.exec_cmd("uwsm app -- hypridle")
+    hl.exec_cmd("systemctl --user start hyprpolkitagent.service")
+    -- NOTE: the on-screen keyboard is deliberately NOT started here, and there
+    -- is nothing to start — it is spawned on demand and killed to dismiss (see
+    -- pocket4-osk). Summon it with the four-finger-up gesture below, the waybar
+    -- button, or `pocket4-osk toggle`.
+    hl.exec_cmd("uwsm app -- nm-applet")
+    hl.exec_cmd("uwsm app -- blueman-applet")
+    -- Clipboard history (Super+V picker, ≙ Maccy on the macbook)
+    hl.exec_cmd("uwsm app -- wl-paste --type text --watch cliphist store")
+    hl.exec_cmd("uwsm app -- wl-paste --type image --watch cliphist store")
+end)

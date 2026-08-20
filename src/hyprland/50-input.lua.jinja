@@ -1,0 +1,41 @@
+---------------
+---- INPUT ----
+---------------
+
+hl.config({
+    input = {
+        -- pocket4's built-in keyboard is physically US-ANSI, not UK-ISO, so a
+        -- gb layout mistypes @ " # ~ | and the £/# key. Every other machine
+        -- keeps gb. Second layout stays Swedish on both (grp:caps_toggle).
+        kb_layout  = "{% if 'pocket4' in targets %}us,se{% else %}gb,se{% endif %}",
+        kb_variant = "",
+        kb_model   = "",
+        -- Caps Lock is remapped to F12 at the evdev layer by keyd (see
+        -- Myarch install.py keyd integration), so XKB never receives a capslock
+        -- keycode and the old "grp:caps_toggle" layout switch could never fire.
+        -- Switch layouts by clicking the waybar language module instead.
+        kb_options = "",
+        kb_rules   = "",
+
+        -- Key repeat, matched to the macOS settings in
+        -- setup/installs/mac/misc.py so holding a key feels the same on every
+        -- machine. Hyprland's defaults are much slower (rate 25, delay 600).
+        --   repeat_rate 66  <- macOS KeyRepeat 1        (1 x 15ms = 15ms, ~66/sec)
+        --   repeat_delay 150 <- macOS InitialKeyRepeat 10 (10 x 15ms = 150ms)
+        -- There is no equivalent of ApplePressAndHoldEnabled: holding a key
+        -- already repeats on Linux, which is what that macOS setting restores.
+        -- ideapad is the exception: the mac-matched 66/sec overshoots on its
+        -- keyboard (pocket4 feels right at 66), so it gets a slower rate. Still
+        -- twice Hyprland's default; the initial delay is unchanged on both.
+        repeat_rate  = {% if 'ideapad' in targets %}50{% else %}66{% endif %},
+        repeat_delay = 150,
+
+        follow_mouse = 1,
+
+        sensitivity = 0,
+
+        touchpad = {
+            natural_scroll = true,
+        },
+    },
+})

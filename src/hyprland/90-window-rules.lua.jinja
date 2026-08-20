@@ -1,0 +1,113 @@
+--------------------------------
+---- WINDOWS AND WORKSPACES ----
+--------------------------------
+
+-- Pin single-purpose apps to their spacework-mirror workspaces. Deliberately
+-- NOT pinned: kitty (terminals are spawned everywhere); the one-shot layout
+-- script ~/.mybin/hypr-load-main (alias `ii`) places the terminal instead.
+-- Brave web-app windows (see ~/.mybin/webapp-*): class is brave-<host>__-Default.
+local pins = {
+    { name = "pin-obsidian", class = "^([Oo]bsidian)$",                 workspace = "2" },
+    { name = "pin-slack",    class = "^([Ss]lack)$",                    workspace = "7" },
+    { name = "pin-signal",   class = "^([Ss]ignal)$",                   workspace = "8" },
+    { name = "pin-calendar", class = "^(org\\.gnome\\.Calendar)$",      workspace = "9" },
+    { name = "pin-anki",     class = "^([Aa]nki)$",                     workspace = "10" },
+    { name = "pin-chatgpt",  class = "^(brave-chatgpt\\.com.*)$",       workspace = "6" },
+    { name = "pin-claude",   class = "^(brave-claude\\.ai.*)$",         workspace = "6" },
+    { name = "pin-whatsapp", class = "^(brave-web\\.whatsapp\\.com.*)$", workspace = "8" },
+}
+for _, p in ipairs(pins) do
+    hl.window_rule({
+        name      = p.name,
+        match     = { class = p.class },
+        workspace = p.workspace,
+    })
+end
+
+-- The Super+Shift+B wallpaper picker's one-off terminal (launched with a
+-- dedicated app-id so nothing else matches). A transient chooser has no business
+-- joining the tiling grid and reflowing the windows you were working in, so it
+-- floats. Done as a window rule rather than exec rules on the bind itself,
+-- because those did not apply to the spawned terminal.
+--
+-- Float ONLY. Size comes from the terminal (in character cells, see termCells
+-- above), not a `size` rule, because the point is to fit the whole list and only
+-- the terminal knows how tall a row is. A `center` rule was tried and dropped:
+-- placement was identical to the pixel with and without it, so it did nothing.
+hl.window_rule({
+    name  = "float-wallpaper-pick",
+    match = { class = "^wallpaper-pick$" },
+    float = true,
+})
+
+-- The emulator picker's one-off terminal, on exactly the same reasoning as the
+-- wallpaper picker above. Unlike the pickers around it this one has NO keybind:
+-- it is reached from the app launcher (Super+R → "Emulators"), because the
+-- launcher already lists every emulator's own .desktop file and this is simply
+-- one more entry among them — a single name to reach for instead of fifteen.
+--
+-- The entry and the app-id are written by game-emulation-linux's install.sh
+-- (currently the boxyard box, destined for ~/mysetup/game-emulation-linux); it
+-- picks foot or kitty per machine, so the class is the only machine-specific value Myarch needs
+-- to know. Float only, no size rule — the terminal sizes itself in character
+-- cells, same as the others.
+hl.window_rule({
+    name  = "float-emu-pick",
+    match = { class = "^emu-pick$" },
+    float = true,
+})
+
+-- The Super+N / Super+Shift+N connectivity TUIs, on the same reasoning as the
+-- wallpaper picker above: a transient chooser should not join the tiling grid
+-- and reflow what you were working in. Float only — size comes from the
+-- terminal's character-cell sizing, and no `center` rule, because Hyprland
+-- already places these identically with and without one (measured for the
+-- picker above; these are the same kind of window).
+hl.window_rule({
+    name  = "float-connectivity-tui",
+    match = { class = "^(net-tui|bt-tui)$" },
+    float = true,
+})
+
+-- The Super+Ctrl+D mydictation settings TUI, same reasoning again: a transient
+-- settings screen has no business reflowing the windows you were dictating
+-- into. Float only, size from the terminal's character cells, no `center` rule
+-- (measured as a no-op for the picker above; this is the same kind of window).
+hl.window_rule({
+    name  = "float-mydictation-settings",
+    match = { class = "^mydictation-settings$" },
+    float = true,
+})
+
+-- The Super+Shift+P pause prompt, same reasoning again — and here reflowing the
+-- grid would be doubly rude, since the window then sits there for the whole
+-- pause. Float only, size from the terminal's character cells, no `center` rule
+-- (measured as a no-op for the picker above; this is the same kind of window).
+hl.window_rule({
+    name  = "float-pause-prompt",
+    match = { class = "^pause-prompt$" },
+    float = true,
+})
+
+-- Ignore maximize requests from apps. You'll probably like this.
+hl.window_rule({
+    name  = "suppress-maximize-events",
+    match = { class = ".*" },
+
+    suppress_event = "maximize",
+})
+
+-- Fix some dragging issues with XWayland
+hl.window_rule({
+    name  = "fix-xwayland-drags",
+    match = {
+        class      = "^$",
+        title      = "^$",
+        xwayland   = true,
+        float      = true,
+        fullscreen = false,
+        pin        = false,
+    },
+
+    no_focus = true,
+})

@@ -1,0 +1,45 @@
+#!/bin/bash
+# hypr-ws-chooser [--move] — wofi picker over the named workspaces, the
+# Hyprland twin of the macbook Hammerspoon grid choosers (ctrl+alt+r goto,
+# ctrl+alt+s move-window). Workspace names mirror row 1 of the spacework
+# grid (home/.config/spacework/stacks/main.toml).
+
+set -euo pipefail
+
+move=0
+if [[ "${1:-}" == "--move" ]]; then
+  move=1
+fi
+
+prompt="Go to workspace"
+if [[ $move == 1 ]]; then
+  prompt="Move window to workspace"
+fi
+
+# Cancelling wofi exits non-zero → set -e ends the script silently (no-op).
+# --cache-file /dev/null: wofi's dmenu frecency cache would reorder the list
+# by past picks, breaking the numeric workspace order.
+choice=$(printf '%s\n' \
+  "1" \
+  "2 Obsidian" \
+  "3 Terminal" \
+  "4 Code" \
+  "5 Code" \
+  "6 AI" \
+  "7 Slack" \
+  "8 Chats" \
+  "9 Calendar" \
+  "10 Anki" \
+  "11" "12" "13" "14" "15" \
+  | wofi --dmenu --cache-file /dev/null --prompt "$prompt")
+
+ws=${choice%% *}
+[[ -n "$ws" ]] || exit 0
+[[ "$ws" =~ ^[0-9]+$ ]] || exit 0
+
+# hyprctl dispatch takes Lua expressions (the hyprland config is hyprland.lua)
+if [[ $move == 1 ]]; then
+  hyprctl dispatch "hl.dsp.window.move({ workspace = \"$ws\" })"
+else
+  hyprctl dispatch "hl.dsp.focus({ workspace = \"$ws\" })"
+fi

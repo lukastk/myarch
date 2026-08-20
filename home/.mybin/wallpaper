@@ -1,0 +1,461 @@
+#!/bin/bash
+# wallpaper — choose and rotate the desktop wallpaper on the Hyprland machines.
+#
+#   wallpaper             show the current image, and when it next changes
+#   wallpaper list        list the set
+#   wallpaper pin         PIN whatever is on screen right now (rotation stops)
+#   wallpaper pick        choose one with fzf; it then holds for a full interval
+#   wallpaper pick --pin  choose one with fzf and PIN it (rotation stops)
+#                         (+ --no-preview to stop it previewing as you browse)
+#   wallpaper next        jump to a new random image; it holds for a full interval
+#   wallpaper <name>      switch to <name> and PIN it (rotation stops entirely)
+#   wallpaper rotate      clear the pin and resume rotation (jumps immediately)
+#   wallpaper daemon      the rotation loop; started from hyprland.lua autostart
+#
+# The image set is the private github.com/lukastk/wallpapers repo, cloned into
+# ~/Pictures/wallpapers by scripts/installs/wallpapers.sh (the `wallpapers`
+# target, which `hyprland` depends on). Add an image by pushing it there; every
+# machine picks it up on its next Myarch installation.
+#
+# THE TWO WAYS TO CHOOSE, along an axis independent of how you select the image.
+# TEMPORARY (`pick`, `next`): the image holds for a FULL interval — every apply
+# pushes the due time a whole interval out, so a choice is never cut short by
+# whatever was left of the current tick — and then rotation carries on. DURABLE
+# (`pick --pin`, `<name>`): it pins, and rotation stops until `wallpaper rotate`.
+# Without either, an image you deliberately chose could vanish seconds later,
+# which is the whole reason the due-time and the pin exist.
+#
+# The temporary forms CLEAR an existing pin, because "then rotation resumes" is
+# otherwise a lie: the daemon skips every tick while pinned, so the image would
+# stay up forever while status reported a pin on some other file entirely.
+#
+# WHY THERE IS NO preload/unload BOOKKEEPING: hyprpaper 0.8.4 dropped those IPC
+# requests entirely (`hyprctl hyprpaper preload` answers "invalid hyprpaper
+# request"; only `wallpaper` and `listactive` remain). `wallpaper <monitor>,<path>`
+# loads on demand and evicts what it replaces — measured across six 2-15MB images
+# its RSS stayed flat at ~100-125MB and fell back afterwards, so rotating all day
+# does not grow it.
+
+set -euo pipefail
+
+WALLPAPER_DIR="${WALLPAPER_DIR:-$HOME/Pictures/wallpapers}"
+INTERVAL="${WALLPAPER_INTERVAL:-1200}" # seconds between rotations
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/myarch"
+PIN_FILE="$STATE_DIR/wallpaper.pin"
+# Epoch second at which the daemon may next rotate. Every apply pushes it a full
+# interval out, so an image you just chose gets the whole 20 minutes rather than
+# whatever happened to be left of the current tick.
+DUE_FILE="$STATE_DIR/wallpaper.due"
+# The daemon polls DUE_FILE rather than sleeping the interval in one go — that is
+# what lets `pick`/`next` reset the clock from another process.
+POLL=$((INTERVAL < 15 ? INTERVAL : 15))
+
+usage() {
+    cat >&2 <<'EOF'
+Usage:
+  wallpaper             show the current image, and when it next changes
+  wallpaper list        list the set
+  wallpaper pin         PIN whatever is on screen right now (rotation stops)
+  wallpaper pick        choose one with fzf; it then holds for a full interval
+  wallpaper pick --pin  choose one with fzf and PIN it (rotation stops entirely)
+                        --no-preview turns off the live preview while browsing
+  wallpaper next        jump to a new random image; it holds for a full interval
+  wallpaper <name>      switch to <name> and PIN it (rotation stops entirely)
+  wallpaper rotate      clear the pin and resume rotation (jumps immediately)
+  wallpaper daemon      the rotation loop; started from hyprland.lua autostart
+
+pick and next clear any existing pin; pin, pick --pin and <name> set one.
+EOF
+    exit 1
+}
+
+# 1200 -> "20m", 90 -> "90s". Only for display.
+pretty_interval() {
+    if [ "$INTERVAL" -ge 60 ] && [ $((INTERVAL % 60)) -eq 0 ]; then
+        echo "$((INTERVAL / 60))m"
+    else
+        echo "${INTERVAL}s"
+    fi
+}
+
+# --- the set ------------------------------------------------------------------
+
+IMAGES=()
+load_images() {
+    [ -d "$WALLPAPER_DIR" ] || {
+        echo "wallpaper: $WALLPAPER_DIR does not exist — the 'wallpapers' target" >&2
+        echo "  (scripts/installs/wallpapers.sh) should have cloned it. Re-run the Myarch installer." >&2
+        exit 1
+    }
+    # -print0/-d '' rather than a newline split: the set is curated by hand and
+    # names like "jen and cats.jpeg" already carry spaces.
+    mapfile -d '' -t IMAGES < <(
+        find "$WALLPAPER_DIR" -maxdepth 1 -type f \
+            \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.webp' \) \
+            -print0 | sort -z
+    )
+    [ ${#IMAGES[@]} -gt 0 ] || {
+        echo "wallpaper: no images in $WALLPAPER_DIR" >&2
+        exit 1
+    }
+}
+
+# Everything that talks to hyprpaper needs the session's instance signature, and
+# plenty of legitimate shells do not have it exported: a tmux server that outlived
+# a Hyprland restart hands its panes the STALE signature (it changes every
+# session), and an ssh shell has none at all. Demanding the variable would make
+# the command unusable from exactly the places it is most wanted, so discover the
+# running instance instead and only fail when there genuinely is not one.
+#
+# Getting this wrong is also silent: hyprctl prints "HYPRLAND_INSTANCE_SIGNATURE
+# not set!" to STDOUT, not stderr, so inside a `cur=$(current)` command
+# substitution the message is captured into the variable rather than shown and the
+# script dies under `set -e` with no output at all.
+resolve_session() {
+    local live=() sig pid
+    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+
+    # An inherited signature is trustworthy only if its socket still exists.
+    if [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ] &&
+        [ -S "$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.sock" ]; then
+        return 0
+    fi
+
+    # `instances` is the one hyprctl subcommand that does not itself need the
+    # signature — it is precisely the discovery mechanism for this. Filter on a
+    # live pid, since a crashed session can leave its runtime dir behind.
+    while read -r sig pid; do
+        if [ -d "/proc/$pid" ]; then live+=("$sig"); fi
+    done < <(hyprctl instances | awk '/^instance /{s=$2; sub(/:$/,"",s)} /pid:/{print s, $2}')
+
+    case ${#live[@]} in
+    1) export HYPRLAND_INSTANCE_SIGNATURE="${live[0]}" ;;
+    0)
+        echo "wallpaper: no Hyprland instance is running on this machine." >&2
+        exit 1
+        ;;
+    *)
+        echo "wallpaper: several Hyprland instances are running — set" >&2
+        echo "  HYPRLAND_INSTANCE_SIGNATURE to pick one:" >&2
+        printf '    %s\n' "${live[@]}" >&2
+        exit 1
+        ;;
+    esac
+}
+
+# The active image, or empty when nothing has been set yet (a legitimate state:
+# a fresh session before the daemon's first apply). Format is "<monitor>: <path>";
+# every monitor is always set to the same image, so the first line is enough.
+current() { hyprctl hyprpaper listactive | sed -n '1s/^[^:]*: //p'; }
+
+# Exact filename or stem first, then a unique case-insensitive substring. An
+# ambiguous prefix is an error, not a coin flip.
+resolve() {
+    local want=$1 f b matches=()
+    for f in "${IMAGES[@]}"; do
+        b=${f##*/}
+        if [ "$b" = "$want" ] || [ "${b%.*}" = "$want" ]; then
+            printf '%s\n' "$f"
+            return 0
+        fi
+    done
+    for f in "${IMAGES[@]}"; do
+        b=${f##*/}
+        case "${b,,}" in *"${want,,}"*) matches+=("$f") ;; esac
+    done
+    case ${#matches[@]} in
+    1) printf '%s\n' "${matches[0]}" ;;
+    0)
+        echo "wallpaper: no image matching '$want' (try: wallpaper list)" >&2
+        return 1
+        ;;
+    *)
+        echo "wallpaper: '$want' matches more than one image:" >&2
+        printf '  %s\n' "${matches[@]##*/}" >&2
+        return 1
+        ;;
+    esac
+}
+
+# Anything but the one already up, so a tick always visibly changes something.
+random_image() {
+    local cur pool=() f
+    cur=$(current)
+    for f in "${IMAGES[@]}"; do
+        [ "$f" = "$cur" ] || pool+=("$f")
+    done
+    # Only possible with a single-image set, where "not the current one" is
+    # unsatisfiable.
+    [ ${#pool[@]} -gt 0 ] || pool=("${IMAGES[@]}")
+    printf '%s\n' "${pool[RANDOM % ${#pool[@]}]}"
+}
+
+# Put an image on screen and nothing else. Used on its own for the picker's live
+# preview and for undoing it, neither of which should touch the rotation clock:
+# browsing the list and then cancelling must leave the schedule exactly as it was.
+set_wallpaper() {
+    local path=$1
+    [ -f "$path" ] || {
+        echo "wallpaper: no such image: $path" >&2
+        return 1
+    }
+    hyprctl hyprpaper wallpaper ",$path"
+}
+
+apply() {
+    local path=$1
+    set_wallpaper "$path"
+    # Whoever COMMITS to a wallpaper — the daemon's own tick, `pick`, `next` —
+    # gets the full interval before the next rotation. Written only after the
+    # apply succeeded, so a failed tick retries promptly instead of idling 20
+    # minutes.
+    mkdir -p "$STATE_DIR"
+    echo $(($(date +%s) + INTERVAL)) >"$DUE_FILE"
+}
+
+# Epoch second the next rotation is due. Absent on a fresh machine (nothing has
+# been applied yet) — that is a legitimate state meaning "due now", not a bug.
+due_at() {
+    if [ -f "$DUE_FILE" ]; then cat "$DUE_FILE"; else echo 0; fi
+}
+
+# --- the pin ------------------------------------------------------------------
+
+pinned() { [ -f "$PIN_FILE" ]; }
+pin() {
+    mkdir -p "${PIN_FILE%/*}"
+    printf '%s\n' "${1##*/}" >"$PIN_FILE"
+}
+unpin() { rm -f "$PIN_FILE"; }
+
+# `wallpaper pin` — keep whatever is on screen right now. The point of this over
+# `wallpaper <name>` is that rotation surfaces images you would never have gone
+# looking for: you see one you like and keep it, without having to know its name.
+pin_current() {
+    local cur base f found=0
+    cur=$(current)
+    [ -n "$cur" ] || {
+        echo "wallpaper: nothing is on screen yet — no wallpaper has been set." >&2
+        exit 1
+    }
+    for f in "${IMAGES[@]}"; do
+        if [ "$f" = "$cur" ]; then
+            found=1
+            break
+        fi
+    done
+    # The daemon resolves the pin by NAME against the set when it starts, so
+    # pinning something from outside the folder would make it die at the next
+    # login. Refuse now, while there is someone here to read the message.
+    [ "$found" -eq 1 ] || {
+        echo "wallpaper: the image on screen is not part of the set, so it cannot be pinned:" >&2
+        echo "    $cur" >&2
+        echo "  Only images in $WALLPAPER_DIR can be pinned." >&2
+        exit 1
+    }
+    base=${cur##*/}
+    pin "$base"
+    echo "pinned to $base — 'wallpaper rotate' resumes rotation"
+}
+
+# --- the picker ---------------------------------------------------------------
+
+# Plain `pick` is temporary: the chosen image holds one full interval and then
+# rotation carries on. `pick --pin` is the durable form, equivalent to running
+# `wallpaper <name>` on whatever you select.
+pick() {
+    local choice rc=0 do_pin=0 preview=1 prompt='wallpaper> ' before='' fzf_args=()
+    while [ $# -gt 0 ]; do
+        case "$1" in
+        --pin | -p)
+            do_pin=1
+            prompt='wallpaper (pin)> '
+            ;;
+        --no-preview | -P) preview=0 ;;
+        "") ;;
+        *)
+            echo "wallpaper: unknown option for pick: $1 (--pin, --no-preview)" >&2
+            exit 1
+            ;;
+        esac
+        shift
+    done
+    command -v fzf >/dev/null || {
+        echo "wallpaper: fzf is not installed" >&2
+        exit 1
+    }
+
+    fzf_args=(--prompt="$prompt" --reverse --no-multi)
+    if [ "$preview" -eq 1 ]; then
+        # Remember what to put back if the pick is abandoned.
+        before=$(current)
+        # LIVE PREVIEW. fzf's `focus` event fires whenever the highlighted row
+        # changes, so each row is shown on the actual desktop as you arrive at it.
+        #
+        # The placeholder is {n} — the item's INDEX — not {} — its text. fzf
+        # substitutes placeholders into a string that a shell then re-parses, so
+        # {} would put a FILENAME into a re-parsed command line, which is exactly
+        # the thing that must never happen (see the shell-safety rule; a name
+        # carrying backticks or $() would execute). An integer cannot. This
+        # script re-derives the path from the index in --apply-index, and its own
+        # path travels via the exported WALLPAPER_SELF rather than being
+        # interpolated too.
+        #
+        # --with-shell 'sh -c': $SHELL is zsh here, and fzf's default wrapper
+        # would re-source the whole of ~/.zshenv on EVERY arrow key. Same reason
+        # boxyard-pick does it.
+        export WALLPAPER_SELF="$0"
+        fzf_args+=(
+            --with-shell 'sh -c'
+            --bind 'focus:execute-silent("$WALLPAPER_SELF" --apply-index {n})'
+        )
+    fi
+
+    choice=$(printf '%s\n' "${IMAGES[@]##*/}" | fzf "${fzf_args[@]}") || rc=$?
+    if [ "$rc" -ne 0 ]; then
+        # 130 = Esc/Ctrl-C, 1 = nothing matched the query. Both mean "changed my
+        # mind", not a failure; anything else is a real fzf error. Either way,
+        # put back whatever the preview replaced — abandoning the picker must
+        # leave the desktop as it found it. (Empty when nothing was on screen to
+        # begin with, which is a legitimate state, not a failure to record it.)
+        if [ -n "$before" ]; then set_wallpaper "$before"; fi
+        if [ "$rc" -eq 130 ] || [ "$rc" -eq 1 ]; then return 0; fi
+        echo "wallpaper: fzf exited $rc" >&2
+        return "$rc"
+    fi
+    apply "$WALLPAPER_DIR/$choice"
+    if [ "$do_pin" -eq 1 ]; then
+        pin "$choice"
+        echo "$choice — pinned; 'wallpaper rotate' resumes rotation"
+    else
+        # Clearing any existing pin is what makes "then rotation resumes" true.
+        # Without this, picking while pinned would leave the image up forever
+        # while status reported a pin on some other file entirely.
+        unpin
+        echo "$choice — holds for $(pretty_interval), then rotation resumes"
+    fi
+}
+
+# --- the daemon ---------------------------------------------------------------
+
+# hyprpaper is started from the same autostart block and takes a moment to bind
+# its socket. Waiting for the socket rather than sleeping a guessed amount means
+# ordering in hyprland.lua is not load-bearing.
+wait_for_hyprpaper() {
+    local sock
+    resolve_session
+    sock="${XDG_RUNTIME_DIR}/hypr/${HYPRLAND_INSTANCE_SIGNATURE}/.hyprpaper.sock"
+    for _ in $(seq 60); do
+        if [ -S "$sock" ]; then return 0; fi
+        sleep 0.5
+    done
+    echo "wallpaper: hyprpaper's IPC socket never appeared at $sock (waited 30s)" >&2
+    exit 1
+}
+
+daemon() {
+    local img
+    wait_for_hyprpaper
+
+    # Nothing is painted at session start, so apply immediately rather than
+    # leaving a bare background for the first interval.
+    if pinned; then img=$(resolve "$(cat "$PIN_FILE")"); else img=$(random_image); fi
+    apply "$img"
+
+    while true; do
+        sleep "$POLL"
+        if pinned; then continue; fi
+        if [ "$(date +%s)" -lt "$(due_at)" ]; then continue; fi
+        # Re-scan every tick so an image pushed to the wallpapers repo and pulled
+        # onto this machine joins the rotation without waiting for a relogin.
+        load_images
+        img=$(random_image)
+        # A failed tick must not kill rotation for the rest of the session (the
+        # daemon is only started at login, so exiting here would end it silently
+        # until the next one). It is still loud — the error lands in the journal.
+        apply "$img" || echo "wallpaper: could not set $img; retrying next tick" >&2
+    done
+}
+
+# --- dispatch -----------------------------------------------------------------
+
+case "${1:-status}" in
+-h | --help)
+    usage
+    ;;
+status)
+    resolve_session
+    load_images
+    cur=$(current)
+    echo "current:  ${cur:-(none set)}"
+    if pinned; then
+        echo "rotation: PINNED to $(cat "$PIN_FILE") — 'wallpaper rotate' resumes it"
+    else
+        left=$(($(due_at) - $(date +%s)))
+        if [ "$left" -lt 0 ]; then left=0; fi
+        echo "rotation: every $(pretty_interval) over ${#IMAGES[@]} images in $WALLPAPER_DIR"
+        echo "next:     in $((left / 60))m $((left % 60))s"
+    fi
+    ;;
+list)
+    load_images
+    printf '%s\n' "${IMAGES[@]##*/}"
+    ;;
+pick)
+    resolve_session
+    load_images
+    pick "${2:-}"
+    ;;
+pin)
+    resolve_session
+    load_images
+    pin_current
+    ;;
+--apply-index)
+    # INTERNAL, for the picker's live preview only — see pick(). Takes the fzf
+    # row index and re-derives the path here, so no filename ever crosses a
+    # shell command line. load_images sorts, and fzf was fed that same sorted
+    # list, so index N means the same image on both sides.
+    resolve_session
+    load_images
+    idx=${2:-}
+    case "$idx" in
+    '' | *[!0-9]*)
+        echo "wallpaper: --apply-index needs a non-negative integer, got '${idx}'" >&2
+        exit 1
+        ;;
+    esac
+    [ "$idx" -lt "${#IMAGES[@]}" ] || {
+        echo "wallpaper: index $idx is past the end of the set (${#IMAGES[@]} images)" >&2
+        exit 1
+    }
+    set_wallpaper "${IMAGES[$idx]}"
+    ;;
+next)
+    resolve_session
+    load_images
+    # Same reasoning as plain `pick`: "jump to a new random image, rotation
+    # continues" is only true if a pin is cleared first.
+    unpin
+    apply "$(random_image)"
+    ;;
+rotate)
+    resolve_session
+    load_images
+    unpin
+    apply "$(random_image)"
+    echo "rotation resumed — every $(pretty_interval)"
+    ;;
+daemon)
+    load_images
+    daemon
+    ;;
+*)
+    resolve_session
+    load_images
+    img=$(resolve "$1")
+    apply "$img"
+    pin "$img"
+    echo "pinned to ${img##*/} — 'wallpaper rotate' resumes rotation"
+    ;;
+esac

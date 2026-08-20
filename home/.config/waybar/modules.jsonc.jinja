@@ -1,0 +1,537 @@
+{
+  /* TOOLTIPS ARE OFF EVERYWHERE IN THIS FILE, deliberately — do not re-add one.
+     GTK renders a tooltip in its own popup positioned BELOW the widget, which on
+     the two-row bar lands squarely on top of row 2 and swallows taps meant for
+     the buttons underneath. Worse on a touchscreen, where the tooltip is armed
+     by press-and-hold — i.e. by an ordinary fingertip press — so the tooltip
+     appears and eats the very tap that summoned it. Reproduced 2026-08-15:
+     hovering workspace 2 covered the rotate and tablet-mode buttons with a
+     "Workspace 2" popup.
+
+     They were not earning their keep anyway: the workspace buttons' tooltips
+     said "Workspace 3" on a button labelled "3", and the rest restated an icon.
+     The scripts behind the json modules still emit a "tooltip" field; waybar
+     ignores it while `"tooltip": false` is set, and it stays useful when reading
+     their output by hand. */
+{% if 'pocket4' in targets %}
+  /* === pocket4 workspace buttons ===
+     Replaces waybar's hyprland/workspaces module, whose click handler sends the
+     LEGACY dispatch form over IPC ("dispatch workspace 3"). A Lua Hyprland
+     config rejects that outright — verified at the raw socket, so it affects any
+     tool doing this, not just waybar, and Hyprland ships no compat shim. These
+     buttons dispatch in Lua via pocket4-ws instead.
+
+     They update on SIGNAL rather than polling: pocket4-ws-watch subscribes to
+     Hyprland's event socket and sends SIGRTMIN+8 on workspace changes, so
+     "interval": "once" is all that is needed. Polling ten modules would mean
+     twenty hyprctl calls per interval for something that changes only when you
+     switch workspace. */
+  "custom/ws1": {
+    "exec": "{{ home }}/.mybin/pocket4-ws status 1",
+    "return-type": "json",
+    "format": "{}",
+    "tooltip": false,
+    "interval": "once",
+    "signal": 8,
+    "on-click": "{{ home }}/.mybin/pocket4-ws go 1"
+  },
+  "custom/ws2": {
+    "exec": "{{ home }}/.mybin/pocket4-ws status 2",
+    "return-type": "json",
+    "format": "{}",
+    "tooltip": false,
+    "interval": "once",
+    "signal": 8,
+    "on-click": "{{ home }}/.mybin/pocket4-ws go 2"
+  },
+  "custom/ws3": {
+    "exec": "{{ home }}/.mybin/pocket4-ws status 3",
+    "return-type": "json",
+    "format": "{}",
+    "tooltip": false,
+    "interval": "once",
+    "signal": 8,
+    "on-click": "{{ home }}/.mybin/pocket4-ws go 3"
+  },
+  "custom/ws4": {
+    "exec": "{{ home }}/.mybin/pocket4-ws status 4",
+    "return-type": "json",
+    "format": "{}",
+    "tooltip": false,
+    "interval": "once",
+    "signal": 8,
+    "on-click": "{{ home }}/.mybin/pocket4-ws go 4"
+  },
+  "custom/ws5": {
+    "exec": "{{ home }}/.mybin/pocket4-ws status 5",
+    "return-type": "json",
+    "format": "{}",
+    "tooltip": false,
+    "interval": "once",
+    "signal": 8,
+    "on-click": "{{ home }}/.mybin/pocket4-ws go 5"
+  },
+  "custom/ws6": {
+    "exec": "{{ home }}/.mybin/pocket4-ws status 6",
+    "return-type": "json",
+    "format": "{}",
+    "tooltip": false,
+    "interval": "once",
+    "signal": 8,
+    "on-click": "{{ home }}/.mybin/pocket4-ws go 6"
+  },
+  "custom/ws7": {
+    "exec": "{{ home }}/.mybin/pocket4-ws status 7",
+    "return-type": "json",
+    "format": "{}",
+    "tooltip": false,
+    "interval": "once",
+    "signal": 8,
+    "on-click": "{{ home }}/.mybin/pocket4-ws go 7"
+  },
+  "custom/ws8": {
+    "exec": "{{ home }}/.mybin/pocket4-ws status 8",
+    "return-type": "json",
+    "format": "{}",
+    "tooltip": false,
+    "interval": "once",
+    "signal": 8,
+    "on-click": "{{ home }}/.mybin/pocket4-ws go 8"
+  },
+  "custom/ws9": {
+    "exec": "{{ home }}/.mybin/pocket4-ws status 9",
+    "return-type": "json",
+    "format": "{}",
+    "tooltip": false,
+    "interval": "once",
+    "signal": 8,
+    "on-click": "{{ home }}/.mybin/pocket4-ws go 9"
+  },
+  "custom/ws10": {
+    "exec": "{{ home }}/.mybin/pocket4-ws status 10",
+    "return-type": "json",
+    "format": "{}",
+    "tooltip": false,
+    "interval": "once",
+    "signal": 8,
+    "on-click": "{{ home }}/.mybin/pocket4-ws go 10"
+  },
+  /* The scratchpad (Hyprland's special workspace, Super+S).
+     It is NOT one of the numeric buttons above: special workspaces have
+     NEGATIVE ids and the name "special:magic", so pocket4-ws's id-based lookups
+     cannot represent one — see the `status special` branch there.
+
+     REGRESSION THIS FIXES: the built-in hyprland/workspaces module further down
+     sets "show-special": true, and that is what used to show the scratchpad.
+     Replacing that module on pocket4 (for the Lua-dispatch reason above) left
+     the option in place but unused, so the indicator silently disappeared on
+     this machine only — every other Hyprland machine still had it.
+
+     It hides itself when the scratchpad is empty (waybar hides a custom module
+     whose text is empty), which is why it sits AFTER the strip rather than
+     inside it: a member that comes and goes would leave the strip's rounded
+     right edge — set on #custom-ws10 — attached to the wrong button. */
+  "custom/wsspecial": {
+    "exec": "{{ home }}/.mybin/pocket4-ws status special",
+    "return-type": "json",
+    "format": "{}",
+    "tooltip": false,
+    "interval": "once",
+    "signal": 8,
+    "on-click": "{{ home }}/.mybin/pocket4-ws toggle-special"
+  },
+  "group/workspaces": {
+    "orientation": "horizontal",
+    "modules": ["custom/ws1", "custom/ws2", "custom/ws3", "custom/ws4", "custom/ws5", "custom/ws6", "custom/ws7", "custom/ws8", "custom/ws9", "custom/ws10", "custom/wsspecial"]
+  },
+
+  /* Brightness and volume as tap-to-reveal sliders.
+     ORIENTATION MUST BE HORIZONTAL. A vertical group forces the whole bar to
+     grow tall enough for its expanded layout EVEN WHEN COLLAPSED, which
+     stretches and clips every other module — tried it, the bar was unusable.
+     A slider floating below the bar would need its own layer-shell surface,
+     which waybar does not do for sliders. So the drawer expands sideways: the
+     handle (first child) is the plain readout, and tapping reveals the slider
+     next to it. */
+  "group/brightness": {
+    "orientation": "horizontal",
+    "drawer": { "transition-duration": 300, "click-to-reveal": true },
+    "modules": ["backlight", "backlight/slider"]
+  },
+  "backlight": {
+    "format": "{icon}",
+    "format-icons": ["󰃞", "󰃟", "󰃠"],
+    "tooltip": false
+  },
+  "backlight/slider": {
+    "min": 5,
+    "max": 100
+  },
+
+  "group/volume": {
+    "orientation": "horizontal",
+    "drawer": { "transition-duration": 300, "click-to-reveal": true },
+    "modules": ["pulseaudio", "pulseaudio/slider"]
+  },
+
+  /* === pocket4 drawer groups ===
+     A "group" whose drawer has click-to-reveal collapses to its FIRST child
+     (the handle) and expands the rest on click. Used here to reclaim
+     horizontal space on a 1600px-wide panel. */
+
+  /* System readouts. A drawer's FIRST child is its always-visible handle, so
+     putting `battery` first means the collapsed (default) state is just a
+     battery badge — the one readout worth having permanently on screen — and
+     tapping it reveals cpu / memory / disk / temperature. No separate handle
+     module needed. */
+  "group/sysinfo": {
+    "orientation": "horizontal",
+    "drawer": { "transition-duration": 300, "click-to-reveal": true },
+    "modules": ["battery", "cpu", "memory", "disk", "temperature"]
+  },
+
+  /* Running apps, collapsed behind one icon (replaces the always-on icon row). */
+  "group/apps": {
+    "orientation": "horizontal",
+    "drawer": { "transition-duration": 300, "click-to-reveal": true },
+    "modules": ["custom/apps-handle", "wlr/taskbar"]
+  },
+  "custom/apps-handle": {
+    "format": "󰘔",
+    "tooltip": false
+  },
+
+  /* Less-used display controls: 180 flip and scale nudges. */
+  "group/display": {
+    "orientation": "horizontal",
+    "drawer": { "transition-duration": 300, "click-to-reveal": true },
+    "modules": ["custom/display-handle", "custom/flip", "custom/scaleup", "custom/scaledown", "custom/gaps"]
+  },
+  "custom/display-handle": {
+    "format": "󰍹",
+    "tooltip": false
+  },
+  "custom/scaleup": {
+    "format": "󰐕",
+    "tooltip": false,
+    "on-click": "{{ home }}/.mybin/pocket4-display scale up"
+  },
+  /* Thermal performance mode. Tap cycles quiet -> balanced -> performance.
+     This sets CPU POWER LIMITS as well as the fan curve — on this machine you
+     cannot get quiet by controlling the fan alone, because a curve only decides
+     how you trade noise against temperature (measured: the same stray thread ran
+     100 C / 6178 RPM at stock power and 68.5 C / 1419 RPM with low limits).
+
+     SIGNAL-driven, not polled: pocket4-thermal-mode pokes RTMIN+9 after every
+     change, so this costs nothing while the mode is not changing. Signal 8 is
+     already taken fleet-wide by the workspace buttons. */
+  "custom/thermal": {
+    "exec": "{{ home }}/.mybin/pocket4-thermal-mode status",
+    "return-type": "json",
+    "format": "{}",
+    "tooltip": false,
+    "interval": "once",
+    "signal": 9,
+    "on-click": "{{ home }}/.mybin/pocket4-thermal-mode cycle",
+    "on-click-right": "{{ home }}/.mybin/pocket4-thermal-mode prev"
+  },
+  "custom/gaps": {
+    "exec": "{{ home }}/.mybin/pocket4-gaps status",
+    "return-type": "json",
+    "format": "{}",
+    "tooltip": false,
+    "interval": 5,
+    "on-click": "{{ home }}/.mybin/pocket4-gaps toggle"
+  },
+  "custom/scaledown": {
+    "format": "󰍴",
+    "tooltip": false,
+    "on-click": "{{ home }}/.mybin/pocket4-display scale down"
+  },
+{% endif %}
+{% if 'pocket4' in targets %}
+  /* === pocket4 touch controls === */
+  "custom/rotate": {
+    "format": "󰑨",
+    "tooltip": false,
+    // Rotates the monitor AND the touchscreen together — rotating only the
+    // monitor leaves taps landing in the wrong place.
+    "on-click": "{{ home }}/.mybin/pocket4-display orientation",
+    "exec": "{{ home }}/.mybin/pocket4-display status",
+    "return-type": "json",
+    "format": "{}",
+    "interval": 5
+  },
+  "custom/flip": {
+    "format": "󰕇",
+    "tooltip": false,
+    "on-click": "{{ home }}/.mybin/pocket4-display flip"
+  },
+  "custom/tabletmode": {
+    "format": "󰓷",
+    "tooltip": false,
+    "on-click": "{{ home }}/.mybin/pocket4-tablet-mode toggle",
+    "exec": "{{ home }}/.mybin/pocket4-tablet-mode status",
+    "return-type": "json",
+    "format": "{}",
+    "interval": 5
+  },
+  /* On-screen keyboard. PURELY MANUAL — it shows and hides only when asked
+     (this button, the `pkb` alias, or the four-finger-up gesture); nothing
+     pops it up on text focus any more. See pocket4-osk for why --auto and the
+     resident daemon both went.
+
+     SIGNAL-driven, not polled: because the keyboard is now spawned to show and
+     killed to hide, "running" IS "visible", so pocket4-osk can poke RTMIN+10
+     the instant it changes and the icon is always truthful. It used to poll
+     every 5s AND report only whether a daemon was alive, so it could read "on"
+     with nothing on screen. Signals 8 (workspaces) and 9 (thermal) are taken. */
+  "custom/osk": {
+    "exec": "{{ home }}/.mybin/pocket4-osk status",
+    "return-type": "json",
+    "format": "{}",
+    "tooltip": false,
+    "interval": "once",
+    "signal": 10,
+    "on-click": "{{ home }}/.mybin/pocket4-osk toggle"
+  },
+{% endif %}
+  // mydictation status. Streams one JSON object per state change and keeps
+  // running, so this is push-driven — no interval, no polling, no signal.
+  // Renders nothing at all while idle. restart-interval covers the daemon
+  // exiting when it has been idle a while; the client reconnects by itself.
+  // The status indicator IS the finish button: it already shows "REC 0:07" for
+  // the whole of a recording, so clicking it stops and transcribes. That is why
+  // there is no separate finish module — it would have spent bar width saying
+  // the same thing twice.
+  "custom/mydictation": {
+    "exec": "{{ home }}/.local/bin/mydictation-key waybar",
+    "return-type": "json",
+    "restart-interval": 2,
+    "tooltip": false,
+    "on-click": "{{ home }}/.local/bin/mydictation-key stop"
+  },
+
+  // Dictation controls. Each is its own module because a waybar custom module
+  // renders exactly one label, and these are meant to be separate buttons you
+  // can hit rather than three mouse buttons hidden on the indicator above.
+  //
+  // `--role` decides which glyph a module draws and, crucially, in which phases
+  // it draws anything at all: empty text hides a custom module, so `start` is
+  // present only while idle and the other three only while recording. The bar
+  // therefore only ever offers actions that currently mean something.
+  //
+  // Each holds its own subscription to the daemon. That is already how the
+  // indicator works, and a subscriber keeps the daemon alive -- which on a
+  // machine using the local backend is what keeps the model warm.
+  "custom/mydictation-start": {
+    "exec": "{{ home }}/.local/bin/mydictation-key waybar --role start",
+    "return-type": "json",
+    "restart-interval": 2,
+    "tooltip": false,
+    "on-click": "{{ home }}/.local/bin/mydictation-key start"
+  },
+  "custom/mydictation-cleanup": {
+    "exec": "{{ home }}/.local/bin/mydictation-key waybar --role cleanup",
+    "return-type": "json",
+    "restart-interval": 2,
+    "tooltip": false,
+    "on-click": "{{ home }}/.local/bin/mydictation-key cleanup toggle"
+  },
+  "custom/mydictation-cancel": {
+    "exec": "{{ home }}/.local/bin/mydictation-key waybar --role cancel",
+    "return-type": "json",
+    "restart-interval": 2,
+    "tooltip": false,
+    "on-click": "{{ home }}/.local/bin/mydictation-key cancel"
+  },
+  // Screen recording is signal-driven: the capture command sends RTMIN+11 on
+  // start/stop, and an empty text field removes the module while inactive.
+  "custom/recording": {
+    "exec": "{{ home }}/.mybin/myarch capture status",
+    "return-type": "json",
+    "format": "{}",
+    "tooltip": false,
+    "interval": "once",
+    "signal": 11,
+    "on-click": "{{ home }}/.mybin/myarch capture stop"
+  },
+
+  /* === Modules Left === */
+  "custom/archicon": {
+    "format": "",
+    "on-click": "{{ home }}/.mybin/myarch menu",
+    "tooltip": false
+  },
+  "clock": {
+    "timezone": "Europe/London",
+    "format": "{:%a %H:%M}",
+    "tooltip": false,
+    "on-click": "gnome-calendar"
+  },
+  "cpu": {
+    "format": "{usage}% ",
+    "tooltip": false
+  },
+  "memory": {
+    "format": "{}% 󰍛",
+    "tooltip": false
+  },
+  "disk": {
+    "format": "{percentage_free}% ",
+    "tooltip": false
+  },
+  "temperature": {
+    "format": "{temperatureC}°C {icon}",
+    "tooltip": false,
+    "format-icons": [
+      ""
+    ]
+  },
+  /* PIN THE BATTERY. With no "bat" key waybar does not just pick a battery, it
+     WATCHES EVERY entry in /sys/class/power_supply — including transient ones
+     that are not system batteries at all, such as a PS5 DualSense's
+     `ps-controller-battery-<mac>`. When such a device goes away, the inotify
+     watch throws an uncaught std::runtime_error and waybar TERMINATES: the
+     whole bar vanishes, and the only trace is one line in the journal
+     (`journalctl --user -t pocket4-waybar`). Observed 2026-08-06 20:02:21 —
+     "Could not watch events for /sys/class/power_supply/ps-controller-battery-…"
+     — on simply unplugging a game controller.
+
+     Naming the battery is per-machine because the panel differs: pocket4 calls
+     it BATT, ideapad BAT1 (`ls /sys/class/power_supply` on the box). It is
+     spelled out here rather than discovered at runtime because install-home.py
+     renders this template with only the target set available — there is no hook
+     for probing the machine — so a wrong name must be visible in the config
+     rather than silently resolved to nothing. */
+  "battery": {
+    "tooltip": false,
+{% if 'pocket4' in targets %}
+    "bat": "BATT",
+{% else %}
+    "bat": "BAT1",
+{% endif %}
+    "states": {
+      "good": 80,
+      "warning": 30,
+      "critical": 15
+    },
+    "format-icons": ["", "", "", "", ""],
+    "format": "{icon} {capacity}%",
+    "format-charging": "󰂄 {capacity}%"
+  },
+  /* === Modules Center === */
+  /* Workspaces mirror row 1 of the macbook spacework grid; the role colors
+     match home/.config/spacework/stacks/main.toml (see hyprland.lua) —
+     numbers only, the color carries the meaning. Workspaces are deliberately
+     unnamed in Hyprland (numeric names), so the icon keys match by number;
+     11-15 fall back to their number. */
+  "hyprland/workspaces": {
+    "tooltip": false,
+    "format": "{icon}",
+    "format-icons": {
+      "1": "1",
+      "2": "<span foreground='#a855f7'>2</span>",
+      "3": "<span foreground='#3b82f6'>3</span>",
+      "4": "<span foreground='#34d399'>4</span>",
+      "5": "<span foreground='#34d399'>5</span>",
+      "6": "<span foreground='#22d3ee'>6</span>",
+      "7": "<span foreground='#ef4444'>7</span>",
+      "8": "<span foreground='#f59e0b'>8</span>",
+      "9": "<span foreground='#a78bfa'>9</span>",
+      "10": "<span foreground='#14b8a6'>10</span>"
+    },
+    /* NOTE: do NOT add "on-click" here. It is not a valid option for
+       hyprland/workspaces (see `man 5 waybar-hyprland-workspaces` — the module
+       takes on-click-window only), so waybar falls back to the generic
+       behaviour of running the value as a SHELL COMMAND, which overrides the
+       built-in click-to-switch. Switching on click is already the default. */
+    "disable-scroll": true,
+    "all-outputs": true,
+    "show-special": true
+  },
+  /* === Modules Right === */
+  "wlr/taskbar": {
+    "tooltip": false,
+    "format": "{icon}",
+    "all-outputs": true,
+    "active-first": true,
+    "on-click": "activate",
+    "on-click-middle": "close",
+    "ignore-list": [
+      "rofi"
+    ]
+  },
+  // The eye: a Wayland idle inhibitor held on waybar's own surface, so
+  // Hyprland stops reporting idle and none of hypridle's timers fire. It is
+  // the one-click, indefinite, no-argument form of `redbull --screen-on`.
+  // Reach for the CLI instead when the stay-awake should END BY ITSELF
+  // (`redbull 2`), when it must survive this bar being restarted — every
+  // display-mode change bounces waybar, silently dropping this inhibitor —
+  // or when you are on SSH with no bar to click.
+  "idle_inhibitor": {
+    "tooltip": false,
+    "format": "{icon}",
+    "format-icons": {
+      "activated": "",
+      "deactivated": ""
+    }
+  },
+  "pulseaudio/slider": {
+    "format": "{volume}%",
+    "format-muted": " MUTE",
+    "step": 5,
+    "tooltip": false
+  },
+  "pulseaudio": {
+    "tooltip": false,
+    "format": "{volume}% {icon}",
+    "format-muted": " {format_source}",
+    "on-click": "{{ home }}/.mybin/myarch panel audio",
+    "format-icons": {
+      "default": [
+        "",
+        ""
+      ]
+    }
+  },
+  "network": {
+    "tooltip": false,
+    "format": "",
+    "format-ethernet": "{ifname} 󰈀",
+    "format-disconnected": " ",
+    "max-length": 50,
+    "on-click": "{{ home }}/.mybin/myarch panel network"
+  },
+  "hyprland/language": {
+    "tooltip": false,
+    "format": "{} ",
+    "on-click": "hyprctl switchxkblayout at-translated-set-2-keyboard next",
+    "format-se": "SWE",
+    "format-en": "ENG"
+  },
+  "group/tray": {
+    "orientation": "horizontal",
+    "drawer": { "transition-duration": 180, "click-to-reveal": true },
+    "modules": ["custom/tray-handle", "tray"]
+  },
+  "custom/tray-handle": {
+    "format": "󰇙",
+    "tooltip": false
+  },
+  /* System tray (nm-applet, blueman-applet, 1Password, ...) */
+  "tray": {
+{% if 'pocket4' in targets %}
+    /* The tray is where the wifi (nm-applet) and bluetooth (blueman-tray)
+       icons live, and on pocket4's 343 PPI 8.8" panel they are hit with a
+       fingertip rather than a cursor — at the default 16px they are far too
+       small to tap reliably. Sized to match the 24px touch buttons in
+       style.css so the bar height is unchanged. Every other machine keeps 16. */
+    "icon-size": 24,
+    "spacing": 12
+{% else %}
+    "icon-size": 16,
+    "spacing": 8
+{% endif %}
+  }
+}

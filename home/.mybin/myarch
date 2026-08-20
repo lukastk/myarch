@@ -1,0 +1,391 @@
+#!/usr/bin/env python3
+"""Myarch desktop command router and touch-friendly control surfaces."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import shutil
+import signal
+import subprocess
+import sys
+import time
+
+HOME = Path.home()
+REPO = Path(__file__).resolve().parents[2]
+MANIFEST = HOME / ".local/state/myarch/installed-files.json"
+RUNTIME = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")) / "myarch"
+RECORD_STATE = RUNTIME / "recording.json"
+
+
+def run(argv: list[str], *, check: bool = True, capture: bool = False, stdin: bytes | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run(argv, check=check, capture_output=capture, text=stdin is None, input=stdin)
+
+
+def detach(argv: list[str]) -> None:
+    subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+
+
+def state() -> dict:
+    if not MANIFEST.is_file():
+        raise SystemExit(f"Myarch is not installed: missing {MANIFEST}")
+    return json.loads(MANIFEST.read_text())
+
+
+def select(prompt: str, labels: list[str]) -> str | None:
+    result = subprocess.run(
+        ["wofi", "--dmenu", "--prompt", prompt, "--insensitive", "--cache-file", "/dev/null"],
+        input="\n".join(labels) + "\n", text=True, capture_output=True,
+    )
+    if result.returncode != 0:
+        return None
+    answer = result.stdout.rstrip("\n")
+    return answer if answer else None
+
+
+def terminal_argv(command: list[str], title: str) -> list[str]:
+    profile = state()["profile"]
+    if profile == "pocket4":
+        return ["foot", f"--title={title}", f"--app-id=myarch.{title.lower().replace(' ', '-')}", *command]
+    return ["kitty", "--title", title, *command]
+
+
+def command_menu() -> None:
+    entries = {
+        " Applications": lambda: detach(["wofi", "--show", "drun"]),
+        "󰆍 Sesh threads (sst)": lambda: detach(terminal_argv(["sesh", "tui"], "Sesh")),
+        "󰌌 Keybindings": keys,
+        "󰏘 Themes": theme_pick,
+        "󰸉 Wallpapers": lambda: detach(terminal_argv([str(HOME / ".mybin/wallpaper"), "pick"], "Wallpapers")),
+        "󰹑 Capture": capture_menu,
+        "󰍹 Displays": lambda: panel("display"),
+        "󰕾 Audio": lambda: panel("audio"),
+        "󰤨 Network": lambda: panel("network"),
+        "󰂯 Bluetooth": lambda: panel("bluetooth"),
+        "󰓅 Power": lambda: panel("power"),
+        "󰒍 Tailscale": lambda: panel("tailscale"),
+        "󰔚 Stay awake": lambda: run([str(HOME / ".mybin/redbull"), "--bg", "--screen-on", "1"]),
+        "󰒲 Lock": lambda: run(["loginctl", "lock-session"]),
+    }
+    choice = select("Myarch", list(entries))
+    if choice is not None:
+        entries[choice]()
+
+
+def keys() -> None:
+    source = REPO / "docs/keybindings.tsv"
+    if not source.is_file():
+        raise SystemExit(f"missing keybinding catalogue: {source}")
+    labels = [line.rstrip("\n").replace("\t", "   ") for line in source.read_text().splitlines() if line and not line.startswith("#")]
+    select("Keybindings", labels)
+
+
+def theme_names() -> list[str]:
+    return [path.stem for path in sorted((REPO / "themes").glob("*.toml"))]
+
+
+def theme_set(name: str) -> None:
+    if name not in theme_names():
+        raise SystemExit(f"unknown theme {name!r}; choose one of: {', '.join(theme_names())}")
+    profile = state()["profile"]
+    run([str(REPO / "install.sh"), "--profile", profile, "--theme", name, "--config-only"])
+    run(["notify-send", "Myarch theme", name])
+
+
+def theme_pick() -> None:
+    choice = select("Theme", theme_names())
+    if choice is not None:
+        theme_set(choice)
+
+
+def panel(name: str) -> None:
+    profile = state()["profile"]
+    if name == "audio":
+        detach(["pavucontrol"])
+    elif name == "network":
+        detach(terminal_argv(["nmtui"], "Network"))
+    elif name == "bluetooth":
+        detach(terminal_argv(["bluetui"], "Bluetooth"))
+    elif name == "power":
+        if profile != "pocket4":
+            raise SystemExit("the IdeaPad power panel is not configured")
+        choices = ["quiet", "chill", "balanced", "performance"]
+        choice = select("Thermal / power mode", choices)
+        if choice is not None:
+            run([str(HOME / ".mybin/pocket4-thermal-mode"), "set", choice])
+    elif name == "display":
+        entries = {
+            "extend": [str(HOME / ".mybin/display-mode"), "extend"],
+            "external only": [str(HOME / ".mybin/display-mode"), "external"],
+            "internal only": [str(HOME / ".mybin/display-mode"), "internal"],
+            "mirror toggle": [str(HOME / ".mybin/display-mode"), "mirror-toggle"],
+        }
+        if profile == "pocket4":
+            entries |= {
+                "rotate landscape / portrait": [str(HOME / ".mybin/pocket4-display"), "orientation"],
+                "flip 180°": [str(HOME / ".mybin/pocket4-display"), "flip"],
+                "toggle tablet scale": [str(HOME / ".mybin/pocket4-tablet-mode"), "toggle"],
+                "toggle on-screen keyboard": [str(HOME / ".mybin/pocket4-osk"), "toggle"],
+            }
+        choice = select("Display", list(entries))
+        if choice is not None:
+            run(entries[choice])
+    elif name == "tailscale":
+        result = run(["tailscale", "status", "--json"], capture=True)
+        status = json.loads(result.stdout)
+        online = status["BackendState"] == "Running"
+        entries = ["disconnect" if online else "connect", "show status", "network check"]
+        choice = select("Tailscale", entries)
+        if choice == "disconnect":
+            run(["sudo", "tailscale", "down"])
+        elif choice == "connect":
+            run(["sudo", "tailscale", "up"])
+        elif choice == "show status":
+            detach(terminal_argv(["tailscale", "status"], "Tailscale"))
+        elif choice == "network check":
+            detach(terminal_argv(["tailscale", "netcheck"], "Tailscale netcheck"))
+    else:
+        raise SystemExit(f"unknown panel: {name}")
+
+
+def freeze_and_select() -> tuple[subprocess.Popen, str] | None:
+    freezer = subprocess.Popen(["hyprpicker", "-r", "-z"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(0.1)
+    selection = run(["slurp"], check=False, capture=True).stdout.strip()
+    if not selection:
+        freezer.terminate()
+        freezer.wait()
+        return None
+    return freezer, selection
+
+
+def screenshot(mode: str) -> None:
+    pictures = HOME / "Pictures"
+    if not pictures.is_dir():
+        raise SystemExit(f"screenshot directory does not exist: {pictures}")
+    if mode == "fullscreen":
+        geometry = run(["hyprctl", "monitors", "-j"], capture=True)
+        monitor = next(item for item in json.loads(geometry.stdout) if item["focused"])
+        width = int(monitor["height"] / monitor["scale"]) if monitor["transform"] in (1, 3) else int(monitor["width"] / monitor["scale"])
+        height = int(monitor["width"] / monitor["scale"]) if monitor["transform"] in (1, 3) else int(monitor["height"] / monitor["scale"])
+        selection = f'{monitor["x"]},{monitor["y"]} {width}x{height}'
+        freezer = None
+    else:
+        picked = freeze_and_select()
+        if picked is None:
+            return
+        freezer, selection = picked
+    path = pictures / time.strftime("screenshot-%Y-%m-%d_%H-%M-%S.png")
+    try:
+        run(["grim", "-g", selection, str(path)])
+        data = path.read_bytes()
+        run(["wl-copy", "--type", "image/png"], stdin=data)
+    finally:
+        if freezer is not None:
+            freezer.terminate()
+            freezer.wait()
+    run(["notify-send", "Screenshot saved", str(path)])
+
+
+def capture_text() -> None:
+    picked = freeze_and_select()
+    if picked is None:
+        return
+    freezer, selection = picked
+    try:
+        image_result = subprocess.run(["grim", "-g", selection, "-"], capture_output=True)
+        if image_result.returncode != 0:
+            raise SystemExit(image_result.stderr.decode(errors="replace"))
+        image = image_result.stdout
+        result = subprocess.run(["tesseract", "stdin", "stdout", "--oem", "1", "--psm", "6", "-l", "eng", "--dpi", "300", "-c", "preserve_interword_spaces=1"], input=image, capture_output=True)
+        if result.returncode != 0:
+            raise SystemExit(result.stderr.decode(errors="replace"))
+        if not result.stdout:
+            raise SystemExit("OCR returned no text")
+        run(["wl-copy"], stdin=result.stdout)
+    finally:
+        freezer.terminate()
+        freezer.wait()
+    run(["notify-send", "Text copied from selection"])
+
+
+def capture_qr() -> None:
+    picked = freeze_and_select()
+    if picked is None:
+        return
+    freezer, selection = picked
+    try:
+        image_result = subprocess.run(["grim", "-g", selection, "-"], capture_output=True)
+        if image_result.returncode != 0:
+            raise SystemExit(image_result.stderr.decode(errors="replace"))
+        image = image_result.stdout
+        result = subprocess.run(["zbarimg", "-q", "--raw", "-Sdisable", "-Sqrcode.enable", "-"], input=image, capture_output=True)
+        if result.returncode != 0 or not result.stdout:
+            raise SystemExit("no QR code found in selection")
+        subprocess.run(["wl-copy", "--sensitive"], input=result.stdout.rstrip(b"\n"), check=True)
+    finally:
+        freezer.terminate()
+        freezer.wait()
+    run(["notify-send", "QR code copied", "Clipboard history will not retain it"])
+
+
+def recording_active() -> bool:
+    if not RECORD_STATE.is_file():
+        return False
+    record = json.loads(RECORD_STATE.read_text())
+    try:
+        os.kill(record["pid"], 0)
+        return True
+    except ProcessLookupError:
+        RECORD_STATE.unlink(missing_ok=True)
+        return False
+
+
+def recording_status() -> None:
+    active = recording_active()
+    print(json.dumps({"text": "" if active else "", "class": "active" if active else "inactive", "tooltip": "Stop screen recording" if active else ""}))
+
+
+def signal_recording_module() -> None:
+    subprocess.run(["pkill", "-RTMIN+11", "-x", "waybar"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def record_stop() -> None:
+    if not recording_active():
+        raise SystemExit("no Myarch screen recording is active")
+    record = json.loads(RECORD_STATE.read_text())
+    os.kill(record["pid"], signal.SIGINT)
+    deadline = time.monotonic() + 8
+    while time.monotonic() < deadline:
+        try:
+            os.kill(record["pid"], 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.1)
+    else:
+        raise SystemExit("gpu-screen-recorder did not stop within 8 seconds")
+    RECORD_STATE.unlink(missing_ok=True)
+    signal_recording_module()
+    run(["notify-send", "Screen recording saved", record["path"]])
+
+
+def record_start(fullscreen: bool, audio: str) -> None:
+    if recording_active():
+        raise SystemExit("a Myarch screen recording is already active")
+    videos = HOME / "Videos"
+    if not videos.is_dir():
+        raise SystemExit(f"recording directory does not exist: {videos}")
+    if fullscreen:
+        monitors = json.loads(run(["hyprctl", "monitors", "-j"], capture=True).stdout)
+        target = next(item["name"] for item in monitors if item["focused"])
+    else:
+        selection = run(["slurp"], check=False, capture=True).stdout.strip()
+        if not selection:
+            return
+        left, size = selection.split()
+        x, y = left.split(",")
+        width, height = size.split("x")
+        target = f"{width}x{height}+{x}+{y}"
+    path = videos / time.strftime("screenrecording-%Y-%m-%d_%H-%M-%S.mp4")
+    argv = ["gpu-screen-recorder", "-w", target, "-k", "auto", "-f", "60", "-fm", "cfr", "-fallback-cpu-encoding", "yes", "-o", str(path)]
+    devices = {"none": None, "desktop": "default_output", "microphone": "default_input", "both": "default_output|default_input"}
+    if audio not in devices:
+        raise SystemExit(f"invalid audio mode {audio!r}")
+    if devices[audio]:
+        argv += ["-a", devices[audio], "-ac", "aac"]
+    process = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    RUNTIME.mkdir(parents=True, exist_ok=True)
+    RECORD_STATE.write_text(json.dumps({"pid": process.pid, "path": str(path)}) + "\n")
+    time.sleep(0.4)
+    if process.poll() is not None:
+        RECORD_STATE.unlink(missing_ok=True)
+        raise SystemExit("gpu-screen-recorder exited during startup")
+    signal_recording_module()
+    run(["notify-send", "Screen recording started", "Use the red camera in the bar to stop"])
+
+
+def capture_menu() -> None:
+    actions = {
+        "Screenshot region": lambda: screenshot("region"),
+        "Screenshot focused monitor": lambda: screenshot("fullscreen"),
+        "Extract text (OCR)": capture_text,
+        "Decode QR": capture_qr,
+        "Pick colour": lambda: detach(["hyprpicker", "-a"]),
+        "Stop screen recording" if recording_active() else "Record region": record_stop if recording_active() else lambda: record_start(False, "none"),
+    }
+    choice = select("Capture", list(actions))
+    if choice is not None:
+        actions[choice]()
+
+
+def doctor() -> None:
+    checks = ["hyprctl", "waybar", "wofi", "grim", "slurp", "hyprpicker", "wl-copy", "cliphist", "mako", "sesh", "mydictation-key"]
+    failed = False
+    for command in checks:
+        path = shutil.which(command)
+        print(f"{'ok' if path else 'FAIL':4} {command}{' -> ' + path if path else ''}")
+        failed |= path is None
+    result = run(["hyprctl", "configerrors"], check=False, capture=True)
+    errors = result.stdout.strip()
+    print(f"{'FAIL' if errors else 'ok':4} hyprland config errors{': ' + errors if errors else ''}")
+    failed |= bool(errors)
+    raise SystemExit(1 if failed else 0)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog="myarch")
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("menu")
+    sub.add_parser("keys")
+    sub.add_parser("doctor")
+    theme = sub.add_parser("theme")
+    theme_sub = theme.add_subparsers(dest="theme_command", required=True)
+    theme_sub.add_parser("list")
+    theme_sub.add_parser("current")
+    theme_sub.add_parser("pick")
+    theme_set_parser = theme_sub.add_parser("set")
+    theme_set_parser.add_argument("name")
+    panel_parser = sub.add_parser("panel")
+    panel_parser.add_argument("name", choices=["audio", "network", "bluetooth", "power", "display", "tailscale"])
+    capture = sub.add_parser("capture")
+    capture_sub = capture.add_subparsers(dest="capture_command", required=True)
+    shot = capture_sub.add_parser("screenshot")
+    shot.add_argument("mode", choices=["region", "fullscreen"], default="region", nargs="?")
+    capture_sub.add_parser("text")
+    capture_sub.add_parser("qr")
+    capture_sub.add_parser("color")
+    capture_sub.add_parser("menu")
+    record = capture_sub.add_parser("record")
+    record.add_argument("--fullscreen", action="store_true")
+    record.add_argument("--audio", choices=["none", "desktop", "microphone", "both"], default="none")
+    capture_sub.add_parser("stop")
+    capture_sub.add_parser("status")
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    if args.command == "menu": command_menu()
+    elif args.command == "keys": keys()
+    elif args.command == "doctor": doctor()
+    elif args.command == "theme":
+        if args.theme_command == "list": print("\n".join(theme_names()))
+        elif args.theme_command == "current": print(state()["theme"])
+        elif args.theme_command == "pick": theme_pick()
+        elif args.theme_command == "set": theme_set(args.name)
+    elif args.command == "panel": panel(args.name)
+    elif args.command == "capture":
+        if args.capture_command == "screenshot": screenshot(args.mode)
+        elif args.capture_command == "text": capture_text()
+        elif args.capture_command == "qr": capture_qr()
+        elif args.capture_command == "color": detach(["hyprpicker", "-a"])
+        elif args.capture_command == "menu": capture_menu()
+        elif args.capture_command == "record": record_start(args.fullscreen, args.audio)
+        elif args.capture_command == "stop": record_stop()
+        elif args.capture_command == "status": recording_status()
+
+
+if __name__ == "__main__":
+    main()

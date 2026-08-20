@@ -1,0 +1,354 @@
+---------------------
+---- KEYBINDINGS ----
+---------------------
+-- Super-native: Super is the WM modifier (the Linux/Hyprland convention);
+-- Ctrl and Alt stay with applications (browser tabs, readline, vim).
+
+local mainMod = "SUPER"
+
+-- --- Launch / session ---
+hl.bind(mainMod .. " + Q",      hl.dsp.exec_cmd(terminal))
+hl.bind(mainMod .. " + Return", hl.dsp.exec_cmd(terminal))
+-- Popup terminal (float; ≙ the mac quake-style iTerm)
+hl.bind(mainMod .. " + T",      hl.dsp.exec_cmd(terminal, { float = true, size = "60% 60%", center = true }))
+hl.bind(mainMod .. " + E",      hl.dsp.exec_cmd(fileManager))
+hl.bind(mainMod .. " + R",      hl.dsp.exec_cmd(menu))
+hl.bind(mainMod .. " + ALT + SPACE", hl.dsp.exec_cmd("wofi --show drun"))
+hl.bind(mainMod .. " + C",      hl.dsp.window.close())
+hl.bind(mainMod .. " + M",      hl.dsp.exec_cmd("uwsm stop"))
+
+-- Connectivity TUIs, preferred over the nm-applet/blueman tray icons (which are
+-- also fiddly to hit on a touch panel). N for network; SHIFT for the other
+-- radio. Same one-off-terminal idiom as the wallpaper picker below: a dedicated
+-- app-id for the float rule to match, size in character cells from termCells,
+-- and `-e` (real on kitty, a documented no-op on foot) so one spelling covers
+-- both machines. Floating comes from the window rule, NOT exec rules on these
+-- binds — see the rule for why.
+--
+-- bluetui earns its place over blueman: BR/EDR lets an unpaired device hold an
+-- ACL link and finish SDP, which blueman shows as simply "connected" while
+-- every encrypted profile (A2DP/HFP) fails and no audio arrives. bluetui lists
+-- paired/trusted/connected separately, so that state is visible rather than
+-- silent.
+hl.bind(mainMod .. " + N", hl.dsp.exec_cmd(
+    terminal .. " --app-id=net-tui " .. termCells(64, 40) .. " -e nmtui"))
+hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd(
+    terminal .. " --app-id=bt-tui " .. termCells(64, 40) .. " -e bluetui"))
+
+-- Launcher that drops the chosen app into the scratchpad (≙ Super+R, then
+-- Super+ALT+S to stash it, then Super+S to reveal it).
+-- wofi is a layer-shell surface rather than a window, so it raises no
+-- window.open of its own — the next window.open after the launcher is the app
+-- it started.
+--
+-- ONE dispatch covers all of it: window.move to special:magic relocates the
+-- window, REVEALS the special workspace, and puts keyboard focus on it
+-- (measured on 0.56.1 — the move alone left activewindow on the moved window,
+-- with specialWorkspace shown). So do NOT append a
+-- workspace.toggle_special("magic") to "also focus" the scratchpad: toggle is
+-- stateful, and on the usual path — scratchpad hidden before the launch — it
+-- would immediately hide the workspace this just opened.
+--
+-- The window is moved BY ADDRESS rather than by dispatching at "the active
+-- window": several apps carry `workspace N silent` windowrules (see WINDOW
+-- RULES below), so the window that opens is frequently NOT the focused one,
+-- and an untargeted dispatch would fling whatever you happen to be looking at
+-- into the scratchpad instead of the app you just launched.
+--
+-- armSeq only ever increases, so each timer closes over a value that can never
+-- be reused. A counter that reset on use could have a stale timer disarm a
+-- newer arm that happened to reach the same number.
+local armSeq = 0
+local armedSeq = nil
+
+hl.bind(mainMod .. " + SHIFT + R", function()
+    armSeq = armSeq + 1
+    local mySeq = armSeq
+    armedSeq = mySeq
+    -- Dismissing the launcher (Esc) picks nothing, so nothing will ever
+    -- consume the arm. Expire it instead, or the next window to open on its
+    -- own — minutes later, from anywhere — would vanish into the scratchpad
+    -- out of nowhere (worse than the stray maximize this used to cause: the
+    -- window leaves the workspace you are looking at entirely).
+    -- Generous enough to cover a cold start of a slow app (Obsidian, Slack).
+    hl.timer(function()
+        if armedSeq == mySeq then
+            armedSeq = nil
+        end
+    end, { timeout = 60000, type = "oneshot" })
+    hl.dispatch(hl.dsp.exec_cmd(menu))
+end)
+
+hl.on("window.open", function(win)
+    if not armedSeq or not win then
+        return
+    end
+    armedSeq = nil
+    hl.dispatch(hl.dsp.window.move({
+        workspace = "special:magic",
+        window = "address:" .. tostring(win.address),
+    }))
+end)
+
+-- --- Focus ---
+hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }))
+hl.bind(mainMod .. " + right", hl.dsp.focus({ direction = "right" }))
+hl.bind(mainMod .. " + up",    hl.dsp.focus({ direction = "up" }))
+hl.bind(mainMod .. " + down",  hl.dsp.focus({ direction = "down" }))
+hl.bind(mainMod .. " + bracketleft",  hl.dsp.focus({ monitor = "-1" }))
+hl.bind(mainMod .. " + bracketright", hl.dsp.focus({ monitor = "+1" }))
+
+-- --- Arrange (the tiling idiom: move within the split, nudge ratios) ---
+hl.bind(mainMod .. " + SHIFT + left",  hl.dsp.window.move({ direction = "left" }))
+hl.bind(mainMod .. " + SHIFT + right", hl.dsp.window.move({ direction = "right" }))
+hl.bind(mainMod .. " + SHIFT + up",    hl.dsp.window.move({ direction = "up" }))
+hl.bind(mainMod .. " + SHIFT + down",  hl.dsp.window.move({ direction = "down" }))
+hl.bind(mainMod .. " + SHIFT + bracketleft",  hl.dsp.window.move({ monitor = "-1" }))
+hl.bind(mainMod .. " + SHIFT + bracketright", hl.dsp.window.move({ monitor = "+1" }))
+
+-- Split nudging (hold to repeat)
+hl.bind(mainMod .. " + minus",         hl.dsp.window.resize({ x = -50, y = 0, relative = true }), { repeating = true })
+hl.bind(mainMod .. " + equal",         hl.dsp.window.resize({ x = 50,  y = 0, relative = true }), { repeating = true })
+hl.bind(mainMod .. " + SHIFT + minus", hl.dsp.window.resize({ x = 0, y = -50, relative = true }), { repeating = true })
+hl.bind(mainMod .. " + SHIFT + equal", hl.dsp.window.resize({ x = 0, y = 50,  relative = true }), { repeating = true })
+
+-- Maximize (daily driver; stays in the layout) / true fullscreen (hides bar)
+hl.bind(mainMod .. " + F",         hl.dsp.window.fullscreen({ mode = "maximized" }))
+hl.bind(mainMod .. " + SHIFT + F", hl.dsp.window.fullscreen({ mode = "fullscreen" }))
+
+hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())
+hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit")) -- dwindle only
+
+-- --- Floats (the only float-makers) ---
+hl.bind(mainMod .. " + SHIFT + V", hl.dsp.window.float({ action = "toggle" }))
+-- Center the focused window as a float
+hl.bind(mainMod .. " + Z", function()
+    local mon = hl.get_active_monitor()
+    if not mon then
+        return
+    end
+    hl.dispatch(hl.dsp.window.float({ action = "on" }))
+    hl.dispatch(hl.dsp.window.resize({
+        x = math.floor(mon.width / mon.scale / 2),
+        y = math.floor(mon.height / mon.scale * 0.9),
+    }))
+    hl.dispatch(hl.dsp.window.center())
+end)
+
+-- ===========================================================================
+-- Workspaces — left-hand banks of five (the macbook structure: digits 1–5,
+-- the modifier picks the bank; Shift takes the window along):
+--   Super+1..5        → 1–5      Super+Ctrl+1..5  → 6–10
+--   Super+AltGr+1..5  → 11–15    (+ SHIFT on any tier = move window + follow)
+-- ===========================================================================
+-- The AltGr tier: AltGr is the MOD5 modifier AND a keysym level-shifter
+-- (AltGr+2 is "@" on the SE layout), so keysym binds would never match —
+-- that tier binds by KEYCODE instead (top-row digits 1–5 = codes 10–14),
+-- which is layout-proof. Plain AltGr typing (@ £ $ €) is unaffected since
+-- Super is always in the chord.
+local wsBanks = {
+    { mods = mainMod,              base = 0  },
+    { mods = mainMod .. " + CTRL", base = 5  },
+    { mods = mainMod .. " + MOD5", base = 10, keycodes = true },
+}
+for _, bank in ipairs(wsBanks) do
+    for i = 1, 5 do
+        local ws  = tostring(bank.base + i)
+        local key = bank.keycodes and ("code:" .. (9 + i)) or tostring(i)
+        hl.bind(bank.mods .. " + " .. key,         hl.dsp.focus({ workspace = ws }))
+        hl.bind(bank.mods .. " + SHIFT + " .. key, hl.dsp.window.move({ workspace = ws }))
+    end
+end
+
+-- Flat Super+6..9,0 for workspaces 6–10, kept alongside (standard Hyprland
+-- convention; costs nothing, conflicts with nothing)
+for i = 6, 10 do
+    local key = i % 10 -- 10 maps to key 0
+    hl.bind(mainMod .. " + " .. key,         hl.dsp.focus({ workspace = tostring(i) }))
+    hl.bind(mainMod .. " + SHIFT + " .. key, hl.dsp.window.move({ workspace = tostring(i) }))
+end
+
+-- Previous/Next workspace; +Shift moves the window along
+hl.bind(mainMod .. " + comma",          hl.dsp.focus({ workspace = "e-1" }))
+hl.bind(mainMod .. " + period",         hl.dsp.focus({ workspace = "e+1" }))
+hl.bind(mainMod .. " + SHIFT + comma",  hl.dsp.window.move({ workspace = "e-1" }))
+hl.bind(mainMod .. " + SHIFT + period", hl.dsp.window.move({ workspace = "e+1" }))
+
+-- Workspace choosers (wofi; covers 11–15 and the named overview)
+hl.bind(mainMod .. " + W",           hl.dsp.exec_cmd("~/.mybin/hypr-ws-chooser"))
+hl.bind(mainMod .. " + SHIFT + W",   hl.dsp.exec_cmd("~/.mybin/hypr-ws-chooser --move"))
+
+-- Overview (hyprexpo) — the same "pick a space" job as the wofi chooser above,
+-- but visual: a 3x3 grid of live workspace previews, click or tap to select.
+-- The keyboard twin of the three-finger-up gesture (see GESTURES), and the
+-- only way to reach the overview on a machine whose gesture source is broken
+-- or whose plugin failed to build. G as in grid, and the key hyprexpo's own
+-- docs use. Escape cancels (plugin `cancel_key`).
+-- Kept ALONGSIDE the wofi chooser rather than replacing it: the chooser also
+-- does --move (send window to workspace), which the overview does not.
+hl.bind(mainMod .. " + G", function()
+    if hl.plugin.hyprexpo ~= nil then
+        hl.plugin.hyprexpo.expo("toggle")
+    end
+end)
+
+-- Dictation (mydictation, ~/dev/*__mydictation). One key, three behaviours:
+-- HOLD to talk and it transcribes on release; TAP to latch and it keeps
+-- recording until you press again; Super+Escape cancels. The two D binds are
+-- the same key's press and release edges — mydictation itself decides which
+-- gesture they meant, so the compositor stays dumb.
+-- Bind mydictation-key, NOT mydictation: Hyprland spawns binds from the login
+-- environment, which has neither ~/.local/bin on PATH nor the ~/.env API keys.
+-- The wrapper sources both and execs the real CLI.
+hl.bind(mainMod .. " + D",          hl.dsp.exec_cmd("mydictation-key key down"))
+hl.bind(mainMod .. " + D",          hl.dsp.exec_cmd("mydictation-key key up"), { release = true })
+hl.bind(mainMod .. " + Escape",     hl.dsp.exec_cmd("mydictation-key cancel"))
+-- Promote the dictation ALREADY IN PROGRESS to the cleanup pass. The decision
+-- is not read until the audio is transcribed, so this works right up until you
+-- stop talking — which is when you usually realise it was a ramble.
+hl.bind(mainMod .. " + ALT + D",    hl.dsp.exec_cmd("mydictation-key cleanup toggle"))
+-- Same gesture, but runs the LLM cleanup pass on this dictation.
+hl.bind(mainMod .. " + SHIFT + D",  hl.dsp.exec_cmd("mydictation-key key down --cleanup"))
+hl.bind(mainMod .. " + SHIFT + D",  hl.dsp.exec_cmd("mydictation-key key up"), { release = true })
+-- Settings TUI (backend, local model, capture, injection…). Same shape as the
+-- wallpaper picker on Super+Shift+B: curses needs a TTY, which a bare exec has
+-- none of, so it goes in a terminal with a dedicated app-id that the float rule
+-- below matches. `-e` is xterm-compatibility on foot and the real thing on
+-- kitty, so one spelling covers both machines.
+-- 40 rows because that is the full settings list without scrolling.
+hl.bind(mainMod .. " + CTRL + D",   hl.dsp.exec_cmd(
+    terminal .. " --app-id=mydictation-settings " .. termCells(64, 40) ..
+    " -e mydictation-key settings"))
+
+-- Special workspace (scratchpad)
+hl.bind(mainMod .. " + S",         hl.dsp.workspace.toggle_special("magic"))
+hl.bind(mainMod .. " + ALT + S",   hl.dsp.window.move({ workspace = "special:magic" }))
+
+-- Scroll through existing workspaces with mainMod + scroll
+hl.bind(mainMod .. " + mouse_down", hl.dsp.focus({ workspace = "e+1" }))
+hl.bind(mainMod .. " + mouse_up",   hl.dsp.focus({ workspace = "e-1" }))
+
+-- Move/resize windows with mainMod + LMB/RMB and dragging
+hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true })
+hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
+
+-- --- Utilities ---
+-- Clipboard history picker (≙ Maccy). --cache-file /dev/null: wofi's dmenu
+-- frecency cache would reorder entries by past picks, breaking cliphist's
+-- newest-first order.
+hl.bind(mainMod .. " + V", hl.dsp.exec_cmd("cliphist list | wofi --dmenu --cache-file /dev/null | cliphist decode | wl-copy"))
+
+-- Myarch capture workflows: save+clipboard, frozen region selection, OCR/QR,
+-- colour picking, and recording are all available from the capture menu.
+hl.bind("Print", hl.dsp.exec_cmd("{{ home }}/.mybin/myarch capture screenshot fullscreen"))
+hl.bind(mainMod .. " + SHIFT + S", hl.dsp.exec_cmd("{{ home }}/.mybin/myarch capture screenshot region"))
+hl.bind(mainMod .. " + CTRL + S", hl.dsp.exec_cmd("{{ home }}/.mybin/myarch capture menu"))
+
+-- Wallpaper (B for background). Super+B jumps to a new random one, Shift for
+-- the chooser — the same variant convention as W/Shift+W above. Either way the
+-- image then holds a full 20 minutes before rotation resumes; see AGENTS.md
+-- "Wallpapers". Absolute path because Hyprland spawns binds from the login
+-- environment, which does not have ~/.mybin on PATH (same reason as the
+-- dictation binds).
+hl.bind(mainMod .. " + B", hl.dsp.exec_cmd("{{ home }}/.mybin/wallpaper next"))
+-- `pick` runs fzf, which needs a TTY — a bare exec has none, so it goes in a
+-- terminal. `-e` is xterm-compatibility on foot (documented as "ignored") and
+-- the real thing on kitty, so one spelling covers both machines. 40 rows so the
+-- whole wallpaper list is visible without scrolling; the app-id is what the
+-- float rule below matches on. Floating comes from that rule rather than exec
+-- rules on this bind, which did not take. termAlpha makes it see-through (see
+-- its comment at the top) — note that what shows through is whatever is
+-- actually behind the window, so it is the wallpaper only where no other
+-- window covers it. Hyprland's blur `xray` (which makes floating windows
+-- ignore TILED windows) does not change that: with it on, a tiled terminal
+-- behind the picker was still legible through it.
+hl.bind(mainMod .. " + SHIFT + B", hl.dsp.exec_cmd(
+    terminal .. " --app-id=wallpaper-pick " .. termCells(64, 40) .. " " .. termAlpha ..
+    " -e {{ home }}/.mybin/wallpaper pick"))
+
+-- Restart the bar (B for bar — the third of the B family, on the CTRL tier the
+-- same way Super+CTRL+D is dictation's settings rather than its main gesture).
+--
+-- This is the manual rescue, not the routine path: display-mode and
+-- pocket4-tablet-mode already bounce the bar themselves after the changes that
+-- are known to break it. It is here because waybar can also die outright with
+-- no layout change at all — any device it watches disappearing can throw an
+-- uncaught exception out of the module and terminate the process — and when
+-- that happens there is no bar left to click and no other way back short of
+-- typing the launcher into a terminal. Recovery should not require remembering
+-- that `waybar` is the wrong command to type (see restart-bar).
+hl.bind(mainMod .. " + CTRL + B", hl.dsp.exec_cmd("{{ home }}/.mybin/restart-bar"))
+
+-- Monitor layout (O for output). Super+O steps through extend → external →
+-- internal; Super+Shift+O toggles MIRROR on and off. Same plain/Shift variant
+-- convention as W/B/D above, and the same absolute path for the same reason
+-- (binds spawn from the login environment, which has no ~/.mybin on PATH).
+--
+-- Mirror is deliberately NOT in the cycle: it is an overlay on whichever
+-- layout you are in, not a fourth layout beside them. You drop into it to
+-- present and come straight back out to what you were doing, so Shift+O
+-- returns to the layout it covered, and Super+O while mirrored steps on from
+-- that covered layout — i.e. exactly where Shift+O then Super+O would land.
+--
+-- GAMING lives on `external` (or `internal`), NOT mirror: a Wine/Proton game
+-- under XWayland picks its fullscreen rect out of the RandR layout, and with
+-- two outputs it can pick one that is not the output Hyprland shows it on —
+-- the pointer then does nothing over one screen and lands offset on the other.
+-- A single enabled output removes the ambiguity (and stops the cursor walking
+-- off the edge of a fullscreen game). A MIRRORED output is still its own
+-- monitor to Hyprland, so XWayland still sees two and the bug stands. See the
+-- header of ~/.mybin/display-mode.
+hl.bind(mainMod .. " + O",           hl.dsp.exec_cmd("{{ home }}/.mybin/display-mode cycle"))
+hl.bind(mainMod .. " + SHIFT + O",   hl.dsp.exec_cmd("{{ home }}/.mybin/display-mode mirror-toggle"))
+
+-- Pause the screen (P for pause): blacks the panel out for N minutes, and any
+-- keypress brings it back. Super+P is dwindle's `pseudo`, so this takes the
+-- Shift chord — the two are unrelated, unlike the W/B/D pairs above.
+--
+-- Same one-off-terminal idiom as the wallpaper picker below: `pause-prompt`
+-- reads a duration, so it needs a TTY that a bare exec has none of, and its
+-- app-id is what the float rule matches. Small (a prompt, not a list), and
+-- opaque — there is nothing behind it worth seeing, and a second later the
+-- screen is black anyway.
+--
+-- The window then lives as long as the pause does, and past it: `pause` prints
+-- how it went (elapsed vs remaining) on the way out, so the prompt holds the
+-- window open on that line until you press a key. Being on screen throughout
+-- costs nothing, since the screen is blacked out for all of it.
+--
+-- 10 rows is what that whole transcript needs — two header lines, the answer,
+-- `pause`'s own two lines, and the close prompt — without scrolling any of it
+-- off the top.
+hl.bind(mainMod .. " + SHIFT + P", hl.dsp.exec_cmd(
+    terminal .. " --app-id=pause-prompt " .. termCells(56, 10) ..
+    " -e {{ home }}/.mybin/pause-prompt"))
+
+-- Laptop multimedia keys for volume and LCD brightness
+hl.bind("XF86AudioRaiseVolume",  hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), { locked = true, repeating = true })
+hl.bind("XF86AudioLowerVolume",  hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),      { locked = true, repeating = true })
+hl.bind("XF86AudioMute",         hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),     { locked = true, repeating = true })
+hl.bind("XF86AudioMicMute",      hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"),   { locked = true, repeating = true })
+-- Brightness goes through ~/.mybin/brightness rather than straight to
+-- brightnessctl, because the backlight alone bottoms out at a floor that is
+-- still visibly lit (raw 2 of 64764, and raw 0 is no darker — it is why `pause`
+-- powers the panel off instead of dimming it). The wrapper continues past that
+-- floor with hyprsunset's gamma ramp, so the screen keeps getting darker while
+-- staying readable. Absolute path: Hyprland spawns binds from the login
+-- environment, which has no ~/.mybin on PATH (same as the dictation binds).
+hl.bind("XF86MonBrightnessUp",   hl.dsp.exec_cmd("{{ home }}/.mybin/brightness up"),   { locked = true, repeating = true })
+hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("{{ home }}/.mybin/brightness down"), { locked = true, repeating = true })
+
+-- Requires playerctl
+hl.bind("XF86AudioNext",  hl.dsp.exec_cmd("playerctl next"),       { locked = true })
+hl.bind("XF86AudioPause", hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
+hl.bind("XF86AudioPlay",  hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
+hl.bind("XF86AudioPrev",  hl.dsp.exec_cmd("playerctl previous"),   { locked = true })
+
+-- Lid switch → internal panel off/on. In server mode (the ideapad boot
+-- default; see AGENTS.md "ideapad server mode") a closed lid doesn't suspend,
+-- so without this the panel would stay lit behind the shut lid until
+-- hypridle's 15-min screen-off. Scoped to eDP-1 so a docked external monitor
+-- is unaffected; `locked` because the machine usually sits on hyprlock.
+-- (switch "on" = lid closed, "off" = lid opened.)
+hl.bind("switch:on:Lid Switch",  hl.dsp.dpms({ action = "off", monitor = "eDP-1" }), { locked = true })
+hl.bind("switch:off:Lid Switch", hl.dsp.dpms({ action = "on",  monitor = "eDP-1" }), { locked = true })

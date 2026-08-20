@@ -1,0 +1,105 @@
+#!/bin/bash
+# pocket4-tablet-mode — toggle touch-oriented behaviour on the GPD Pocket 4.
+#
+# WHY THIS IS A MANUAL TOGGLE, not automatic:
+# The Pocket 4 exposes NO tablet-mode signal. /proc/bus/input/devices shows only
+# SW_LID (SW=1); nothing reports SW_TABLET_MODE, and folding the keyboard behind
+# the screen does not even change the lid state (verified 2026-07-28 — lid stayed
+# "open" throughout a fold). The accelerometer cannot substitute: it lives in the
+# screen, so "pad held upright" and "laptop with screen open" produce the same
+# gravity vector, and a device lying flat gives no in-plane signal at all.
+# So there is nothing to detect. A button it is.
+#
+# What tablet mode does:
+#   - a larger scale, so touch targets are hittable with a finger
+#
+# That is ALL it does now. It used to also start lisgd for touchscreen
+# gestures; gestures moved to the hyprgrass plugin (installed by
+# Myarch install.py plugin integration, configured in the GESTURES section of
+# src/hyprland/*.lua.jinja). hyprgrass runs inside
+# Hyprland, so three-finger swipes are ALWAYS live — in laptop mode too, which
+# is what you want — and they drive Hyprland's built-in workspace action, i.e.
+# the 1:1 animated swipe that lisgd's after-the-fact recognition could not do.
+#
+# Deliberately NOT included: disabling the internal keyboard/touchpad, and
+# anything to do with the on-screen keyboard. The OSK is fully manual — see the
+# note above on().
+#
+# Usage: pocket4-tablet-mode {on|off|toggle|get}
+set -euo pipefail
+
+STATE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/pocket4"
+STATE="$STATE_DIR/tablet-mode"
+mkdir -p "$STATE_DIR"
+
+MON="eDP-1"
+SCALE_DESKTOP=1.6   # matches hyprland.lua.jinja's boot-time value
+SCALE_TABLET=2.0    # bigger touch targets
+
+set_scale() {
+    local s="$1" t
+    t=$(hyprctl monitors -j | jq -r '.[0].transform')
+    hyprctl eval "hl.monitor({ output = \"$MON\", mode = \"preferred\", position = \"auto\", scale = $s, transform = $t })" >/dev/null
+
+    # WAYBAR DOES NOT REFLOW ON A SCALE CHANGE, so the bar is bounced here for
+    # the same reason display-mode bounces it after a layout change: changing the
+    # scale changes the monitor's LOGICAL width (1600 at 1.6, 1280 at 2.0 in
+    # landscape; 1000 and 800 in portrait), and waybar otherwise keeps the width
+    # it was laid out for — leaving a bar sized for the screen you just stopped
+    # having.
+    #
+    # The restart must come AFTER the hyprctl above, not before: pocket4-waybar
+    # sizes the bar from the scale the monitor is reporting when it starts.
+    #
+    # 2026-08-15: tablet mode used to keep the ONE-row layout, and at 1280 logical
+    # px ~240px of it sat off the edge of the panel. The comment that used to live
+    # here recorded that overflow as a deliberately accepted tradeoff — "DO NOT
+    # fix this again without asking" — and Lukas has since asked for exactly that
+    # fix, so the two-row layout now covers tablet mode in both orientations.
+    #
+    # ABSOLUTE INSTALLED path, per the note below on sibling scripts.
+    "$HOME/.mybin/restart-bar"
+}
+
+# The on-screen keyboard is NOT started by tablet mode, and not at session start
+# either. It is fully manual — summon and dismiss it with the waybar keyboard
+# button, the four-finger-up gesture, or `pocket4-osk toggle` / the `pkb` alias.
+# (It used to auto-show on text focus via `wvkbd --auto`; that fought every
+# manual toggle and popped up for things as innocuous as opening a terminal, so
+# it is gone — see the header of pocket4-osk.)
+# Sibling scripts are called by ABSOLUTE INSTALLED path. Two traps here:
+#
+#  1. ~/.mybin is NOT on the PATH waybar hands to an on-click command (check:
+#     systemctl --user show-environment | grep ^PATH), so a bare `pocket4-osk`
+#     is "command not found" — and under `set -e` that kills the script BEFORE
+#     the state file is written. Symptom: tablet mode applies its scale, but
+#     the button never toggles back off, because $STATE still says
+#     "off" while the machine is actually in tablet mode.
+#
+#  2. Do NOT resolve this via `readlink -f "$0"`. ~/.mybin entries are symlinks
+#     into the Myarch checkout, where the file carries its target marker in the
+#     name (^pocket4^pocket4-osk) — so the resolved sibling path does not exist.
+#     Use the installed path.
+OSK="$HOME/.mybin/pocket4-osk"
+
+# Leaving tablet mode still STOPS the keyboard, so exiting cannot strand a
+# keyboard on screen — but entering it does not start one.
+on()  { set_scale "$SCALE_TABLET";  echo on  > "$STATE"; }
+off() { set_scale "$SCALE_DESKTOP"; "$OSK" hide; echo off > "$STATE"; }
+
+case "${1:-toggle}" in
+    on)     on ;;
+    off)    off ;;
+    get)    cat "$STATE" 2>/dev/null || echo off ;;
+    status)
+        # waybar `return-type: json`. "class" drives the CSS so the button
+        # visibly differs when tablet mode is active.
+        if [ "$(cat "$STATE" 2>/dev/null || echo off)" = "on" ]; then
+            printf '{"text":"\xf3\xb0\x93\xb7","class":"on","tooltip":"Tablet mode ON (large scale) — tap to exit"}\n'
+        else
+            printf '{"text":"\xf3\xb0\x93\xb7","class":"off","tooltip":"Tablet mode off — tap to enable the large touch scale"}\n'
+        fi
+        ;;
+    toggle) if [ "$(cat "$STATE" 2>/dev/null || echo off)" = "on" ]; then off; else on; fi ;;
+    *)      echo "usage: $0 {on|off|toggle|get}" >&2; exit 2 ;;
+esac

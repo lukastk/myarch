@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+
+pycache=$(mktemp -d)
+trap 'rm -rf -- "$pycache"' EXIT
+export PYTHONPYCACHEPREFIX="$pycache"
+python3 -m py_compile "$repo/install.py" "$repo/home/.mybin/myarch" "$repo/scripts/check-secrets.py" "$repo/tests/test_render.py"
+python3 -m unittest discover -s "$repo/tests" -v
+
+mapfile -d '' shell_files < <(find "$repo/home/.mybin" "$repo/home/.config/myarch/shell" -type f -print0)
+for file in "${shell_files[@]}"; do
+  if [[ $file != *.jinja ]] && head -1 "$file" | grep -qE '^#!.*/(ba|z)?sh'; then
+    shellcheck --severity=warning -x "$file"
+  fi
+done
+shellcheck --severity=warning "$repo/install.sh" "$repo/scripts/test"
+
+"$repo/scripts/check-secrets.py"

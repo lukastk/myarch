@@ -1,0 +1,63 @@
+-- Myarch Hyprland config (Lua) — the Linux counterpart of
+-- the macbook yabai/skhd/spacework desktop. Parity with the mac is
+-- CONCEPTUAL, not chord-level:
+--   - Workspaces 1–15 mirror row 1 of the macbook spacework grid
+--     (home/.config/spacework/stacks/main.toml): 2 Obsidian, 3 Terminal,
+--     4/5 Code, 6 AI, 7 Slack, 8 Chats, 9 Calendar, 10 Anki; 11–15 spare. Display
+--     names/colors live in waybar's labels (workspaces stay numerically
+--     named).
+--   - The keymap is SUPER-NATIVE (the Linux/Hyprland convention: Super is
+--     the WM modifier; Ctrl and Alt belong to applications).
+--   - Arrangement is the tiling idiom, native dispatchers only: the layout
+--     owns geometry; you move windows within the split and nudge ratios.
+--     Floats only come from the explicit float actions (Super+Z center,
+--     Super+T popup terminal, Super+Shift+V toggle) and the one-off chooser
+--     popup (Super+Shift+B), which floats by window rule so a transient picker
+--     never reflows the grid.
+-- Assumes a uwsm-managed session (GDM "Hyprland (uwsm)" entry).
+
+------------------
+---- MONITORS ----
+------------------
+
+-- Per-machine display config. The standalone Myarch installer renders the active
+-- profile into `targets`, so hardware differences remain explicit without
+-- duplicating the common desktop configuration.
+{% if 'pocket4' in targets %}
+-- GPD Pocket 4: the eDP panel is physically PORTRAIT (1600x2560) mounted
+-- sideways, so it needs an explicit transform for normal laptop use. The kernel
+-- quirk that would make this automatic (DMI "GPD"/"G1628-04" ->
+-- lcd1600x2560_rightside_up) is NOT upstream as of 7.2-rc5 — the patch was
+-- posted Sept 2025 and again Feb 2026 and has not merged. Rotation is therefore
+-- set in three places: the kernel cmdline (video=eDP-1:panel_orientation=
+-- right_side_up fbcon=rotate:1) for console/early boot, here for the desktop,
+-- and on the touchscreen device (which MUST match this transform).
+--
+-- scale: 2560x1600 on an 8.8" panel is ~343 PPI, so "auto" does not pick
+-- anything sensible. 1.6 divides cleanly (2560/1.6 = 1600, 1600/1.6 = 1000).
+-- TUNE THIS LIVE before trusting it: hyprctl keyword monitor "eDP-1,preferred,auto,<scale>,transform,3"
+hl.monitor({
+    output    = "eDP-1",
+    mode      = "preferred",
+    position  = "auto",
+    scale     = 1.6,
+    transform = 3,
+})
+
+-- Touchscreen. Its transform MUST match the monitor transform above, or touch
+-- input lands in the wrong place on screen. The name is Hyprland's
+-- normalisation of the evdev name "NVTK0603:00 0603:F001" (lowercased, spaces
+-- replaced by dashes) — confirmed against /proc/bus/input/devices on the
+-- machine, and matching the ArchWiki GPD Pocket 4 page.
+hl.device({
+    name      = "nvtk0603:00-0603:f001",
+    transform = 3,
+})
+{% else %}
+hl.monitor({
+    output   = "",
+    mode     = "preferred",
+    position = "auto",
+    scale    = "auto",
+})
+{% endif %}

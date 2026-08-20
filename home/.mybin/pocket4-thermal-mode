@@ -1,0 +1,110 @@
+#!/bin/bash
+# pocket4-thermal-mode — cycle/set the thermal performance mode, and render it for waybar.
+#
+# A thin front-end over `pocket4-mode` (installed from github.com/lukastk/gpd-fanctl),
+# which sets CPU power limits, a frequency cap, --tctl-temp AND the fan curve from one
+# mode. See the pocket4 thermals section of Myarch's Pocket 4 documentation for why those are one
+# control and not two.
+#
+#   quiet        8/8/12 W + 3.5 GHz cap + tctl 80 C, fan silent   — ~573 RPM idle
+#   chill        same limits as quiet, fan `cool`                 — coolest CASE
+#   balanced     15/17/22 W + tctl 85 C, fan balanced  [default]  — ~1290 RPM
+#   performance  25/28/32 W + tctl 100 C, fan cool                — ~1940 RPM
+#
+# `chill` exists because on a handheld the CASE is part of the heatsink: a fan held
+# below its audible threshold does not remove the heat, it just routes it through the
+# thing you are holding. Measured on ordinary browsing, raising the fan from 1438 to
+# ~4370 RPM dropped the die 62 -> 51 C with nothing else changed.
+#
+# `set` needs root, so this uses sudo — pocket4 has NOPASSWD sudo (setup/prelim/arch.py).
+#
+# Usage: pocket4-thermal-mode {cycle|next|prev|set <mode>|get|status}
+set -euo pipefail
+
+MODES=(quiet chill balanced performance)
+# waybar signal. 8 is taken fleet-wide by the workspace buttons; 9 is this one.
+WAYBAR_SIGNAL=9
+
+get() { pocket4-mode; }
+
+# Poke waybar so the button updates immediately instead of waiting for a poll.
+# The module is signal-driven ("interval": "once") precisely so it costs nothing when
+# the mode is not changing — polling ten modules on a handheld is what this machine's
+# waybar config already argues against.
+refresh() { pkill -RTMIN+$WAYBAR_SIGNAL -x waybar 2>/dev/null || true; }
+
+set_mode() {
+    sudo pocket4-mode set "$1" >/dev/null
+    refresh
+    # Notify, because the effect of `quiet` is deliberately hard to hear — that is the
+    # point of it — so without feedback you cannot tell the keybinding worked.
+    if command -v notify-send >/dev/null 2>&1; then
+        case "$1" in
+            quiet)       notify-send -t 2000 -h string:x-canonical-private-synchronous:thermal \
+                             "Thermal: quiet" "Silent and cool · single-threaded work ~25-33% slower" ;;
+            chill)       notify-send -t 2000 -h string:x-canonical-private-synchronous:thermal \
+                             "Thermal: chill" "Coolest case · same speed cost as quiet" ;;
+            balanced)    notify-send -t 2000 -h string:x-canonical-private-synchronous:thermal \
+                             "Thermal: balanced" "Inaudible for normal work" ;;
+            performance) notify-send -t 2000 -h string:x-canonical-private-synchronous:thermal \
+                             "Thermal: performance" "Full speed · fan audible under load" ;;
+        esac
+    fi
+}
+
+# step <+1|-1> — move through MODES, clamping rather than wrapping at the ends.
+# Deliberately NOT wrapping: cycling from performance straight back to quiet would
+# silently drop you from full power to a 3.5 GHz cap on one extra keypress, which is a
+# surprising thing to do by accident mid-build. Wrapping is fine for `cycle`, which is
+# an explicit round-robin; a directional step should stop.
+step() {
+    local cur idx i
+    cur=$(get)
+    for i in "${!MODES[@]}"; do [ "${MODES[$i]}" = "$cur" ] && idx=$i; done
+    [[ -n "${idx:-}" ]] || { echo "pocket4-thermal-mode: unknown current mode: $cur" >&2; return 1; }
+    local next=$(( idx + $1 ))
+    (( next < 0 )) && next=0
+    (( next >= ${#MODES[@]} )) && next=$(( ${#MODES[@]} - 1 ))
+    [ "${MODES[$next]}" = "$cur" ] || set_mode "${MODES[$next]}"
+}
+
+case "${1:-cycle}" in
+    cycle)
+        # Explicit round-robin: quiet -> chill -> balanced -> performance -> quiet.
+        cur=$(get); idx=
+        for i in "${!MODES[@]}"; do [ "${MODES[$i]}" = "$cur" ] && idx=$i; done
+        [[ -n "${idx:-}" ]] || { echo "pocket4-thermal-mode: unknown current mode: $cur" >&2; exit 1; }
+        set_mode "${MODES[$(( (idx + 1) % ${#MODES[@]} ))]}"
+        ;;
+    next) step +1 ;;
+    prev) step -1 ;;
+    set)
+        want="${2:-}"
+        printf '%s\n' "${MODES[@]}" | grep -qx "$want" \
+            || { echo "usage: $0 set {${MODES[*]}}" >&2; exit 2; }
+        set_mode "$want"
+        ;;
+    get) get ;;
+    status)
+        mode=$(get)
+        # Tctl and RPM in the tooltip: the whole point of quiet mode is that you cannot
+        # hear whether it worked, so show the numbers.
+        rpm=$(cat /sys/class/hwmon/hwmon*/fan1_input 2>/dev/null | head -1)
+        temp=$(awk '{printf "%d", $1/1000}' /sys/class/hwmon/hwmon*/temp1_input 2>/dev/null | head -c3)
+        for h in /sys/class/hwmon/hwmon*; do
+            [ "$(cat "$h/name" 2>/dev/null)" = k10temp ] && \
+                temp=$(awk '{printf "%d", $1/1000}' "$h/temp1_input")
+            [ "$(cat "$h/name" 2>/dev/null)" = gpdfan ] && rpm=$(cat "$h/fan1_input")
+        done
+        case "$mode" in
+            quiet)       icon="󰜗"; desc="silent · warmer case · slower single-threaded" ;;
+            chill)       icon="󰞌"; desc="coolest case · same speed cost as quiet" ;;
+            balanced)    icon="󰈐"; desc="inaudible for normal work" ;;
+            performance) icon="󰓅"; desc="full speed · audible under load" ;;
+            *)           icon="󰈐"; desc="unknown mode" ;;
+        esac
+        printf '{"text":"%s","class":"%s","tooltip":"Thermal: %s — %s\\n%s°C · %s RPM\\nTap to cycle"}\n' \
+            "$icon" "$mode" "$mode" "$desc" "${temp:-?}" "${rpm:-?}"
+        ;;
+    *) echo "usage: $0 {cycle|next|prev|set <mode>|get|status}" >&2; exit 2 ;;
+esac

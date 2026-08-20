@@ -1,0 +1,40 @@
+
+---------------------
+---- MY PROGRAMS ----
+---------------------
+
+-- pocket4 uses foot rather than kitty: kitty does not turn touchscreen taps
+-- into terminal mouse reports, so tapping inside a TUI (tmux panes) does
+-- nothing. That matters here because in pad mode the trackpad is folded away
+-- and touch is the only pointer. Verified: taps work in tmux under foot and
+-- gnome-console, not under kitty. foot also speaks the kitty keyboard
+-- protocol, so Shift+Enter still reaches Claude Code through tmux.
+{% if 'pocket4' in targets %}
+local terminal    = "foot"
+-- Initial size of a one-off popup terminal in CHARACTER CELLS rather than
+-- pixels, so a window sized to fit its content actually fits it whatever the
+-- font size or display scale is (pocket4 runs at scale 1.6). A function rather
+-- than a constant because the popups below want different sizes — a wallpaper
+-- list and a one-line prompt are not the same window. foot and kitty are the
+-- only things that differ between the machines here; --app-id is common to both.
+local function termCells(w, h)
+    return "--window-size-chars=" .. w .. "x" .. h
+end
+-- Background translucency, used ONLY by the wallpaper picker below: you are
+-- choosing a picture, so the window covering it should not hide it entirely.
+-- Set on the TERMINAL rather than as a Hyprland `opacity` window rule, because
+-- the rule fades the whole surface — text included — while both terminals fade
+-- only cells carrying the DEFAULT background (foot's alpha-mode=default), so
+-- glyphs and fzf's selected-row highlight stay fully opaque and readable.
+-- foot's alpha belongs to the theme section: a bare `colors.alpha` override
+-- still works but warns "[colors]: deprecated; use [colors-dark] instead".
+local termAlpha   = "-o colors-dark.alpha=0.80"
+{% else %}
+local terminal    = "kitty"
+local function termCells(w, h)
+    return "-o initial_window_width=" .. w .. "c -o initial_window_height=" .. h .. "c"
+end
+local termAlpha   = "-o background_opacity=0.80"
+{% endif %}
+local fileManager = "nautilus"
+local menu        = "{{ home }}/.mybin/myarch menu"

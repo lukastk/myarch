@@ -1,0 +1,42 @@
+#!/bin/bash
+# pocket4-gaps — toggle window gaps between the normal setting and zero.
+#
+# On an 8.8" panel (1000x1600 logical at scale 1.6) the fleet-wide gaps_out of
+# 20 wastes a lot of edge, so pocket4 uses smaller ones by default — see
+# src/hyprland/*.lua.jinja, and keep the values below in
+# step with it. This toggles those off entirely for when you want every pixel.
+#
+# Runtime changes go through `hyprctl eval` with Lua, like everything else on
+# this machine — `hyprctl keyword` does not work against a Lua config.
+#
+# Usage: pocket4-gaps {toggle|on|off|get|status}
+set -euo pipefail
+
+# Must match the pocket4 branch of hyprland.lua.jinja.
+GAPS_IN=3
+GAPS_OUT=6
+
+# `hyprctl getoption general:gaps_out` prints "css gap data: 6 6 6 6".
+cur_out() { hyprctl getoption general:gaps_out | awk '/css gap data:/ {print $4; exit}'; }
+
+apply() {
+    hyprctl eval "hl.config({ general = { gaps_in = $1, gaps_out = $2 } })" >/dev/null
+}
+
+on()  { apply "$GAPS_IN" "$GAPS_OUT"; }   # gaps present
+off() { apply 0 0; }                       # flush to the edges
+
+case "${1:-toggle}" in
+    on)     on ;;
+    off)    off ;;
+    get)    if [ "$(cur_out)" = "0" ]; then echo off; else echo on; fi ;;
+    toggle) if [ "$(cur_out)" = "0" ]; then on; else off; fi ;;
+    status)
+        if [ "$(cur_out)" = "0" ]; then
+            printf '{"text":"\xf3\xb0\x98\xa6","class":"off","tooltip":"Gaps off (windows flush to the edges) — tap to restore"}\n'
+        else
+            printf '{"text":"\xf3\xb0\x98\xa6","class":"on","tooltip":"Gaps on — tap to remove them and use the full screen"}\n'
+        fi
+        ;;
+    *) echo "usage: $0 {toggle|on|off|get|status}" >&2; exit 2 ;;
+esac

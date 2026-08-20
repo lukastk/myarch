@@ -1,0 +1,35 @@
+# hyprlock — lock screen. Colors follow the Arthur scheme used by kitty
+# (background #1c1c1c, foreground #ddeedd, cursor lavender #e2bbef).
+
+general {
+    hide_cursor = true
+}
+
+background {
+    monitor =
+    color = rgba({{ theme.background[1:] }}ff)
+}
+
+input-field {
+    monitor =
+    size = 300, 50
+    outline_thickness = 2
+    outer_color = rgba({{ theme.accent[1:] }}ff)
+    inner_color = rgba({{ theme.background[1:] }}ff)
+    font_color = rgba({{ theme.foreground[1:] }}ff)
+    placeholder_text = <i>Password...</i>
+    position = 0, -80
+    halign = center
+    valign = center
+}
+
+label {
+    monitor =
+    text = $TIME
+    color = rgba({{ theme.foreground[1:] }}ff)
+    font_size = 64
+    font_family = JetBrainsMono Nerd Font
+    position = 0, 80
+    halign = center
+    valign = center
+}

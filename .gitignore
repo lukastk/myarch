@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Research inputs are intentionally not part of the distributable desktop.
+research/
+tmp/
