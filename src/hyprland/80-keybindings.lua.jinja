@@ -238,7 +238,7 @@ hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
 -- newest-first order.
 hl.bind(mainMod .. " + V", hl.dsp.exec_cmd("cliphist list | wofi --dmenu --cache-file /dev/null | cliphist decode | wl-copy"))
 
--- Myarch capture workflows: save+clipboard, frozen region selection, OCR/QR,
+-- myarch capture workflows: save+clipboard, frozen region selection, OCR/QR,
 -- colour picking, and recording are all available from the capture menu.
 hl.bind("Print", hl.dsp.exec_cmd("{{ home }}/.mybin/myarch capture screenshot fullscreen"))
 hl.bind(mainMod .. " + SHIFT + S", hl.dsp.exec_cmd("{{ home }}/.mybin/myarch capture screenshot region"))

@@ -15,7 +15,7 @@
 # The image set is the private github.com/lukastk/wallpapers repo, cloned into
 # ~/Pictures/wallpapers by scripts/installs/wallpapers.sh (the `wallpapers`
 # target, which `hyprland` depends on). Add an image by pushing it there; every
-# machine picks it up on its next Myarch installation.
+# machine picks it up on its next myarch installation.
 #
 # THE TWO WAYS TO CHOOSE, along an axis independent of how you select the image.
 # TEMPORARY (`pick`, `next`): the image holds for a FULL interval — every apply
@@ -84,7 +84,7 @@ IMAGES=()
 load_images() {
     [ -d "$WALLPAPER_DIR" ] || {
         echo "wallpaper: $WALLPAPER_DIR does not exist — the 'wallpapers' target" >&2
-        echo "  (scripts/installs/wallpapers.sh) should have cloned it. Re-run the Myarch installer." >&2
+        echo "  (scripts/installs/wallpapers.sh) should have cloned it. Re-run the myarch installer." >&2
         exit 1
     }
     # -print0/-d '' rather than a newline split: the set is curated by hand and

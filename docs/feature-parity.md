@@ -1,6 +1,6 @@
 # Feature parity contract
 
-A Myarch change is incomplete if it regresses any item below.
+A myarch change is incomplete if it regresses any item below.
 
 | Area | Invariant |
 |---|---|

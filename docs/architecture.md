@@ -9,13 +9,13 @@
 3. records and temporarily enables `misc.disable_autoreload` and `debug.suppress_errors`;
 4. migrates known desktop state from the former myrig namespace when needed;
 5. renders templates atomically and symlinks static files;
-6. writes an installed-file manifest and removes only stale files it can prove Myarch owns;
+6. writes an installed-file manifest and removes only stale files it can prove myarch owns;
 7. configures keyd, Bluetooth, NTP, and font caches;
 8. validates/install external profile contracts;
 9. updates, adds, and enables ABI-locked Hyprpm plugins;
 10. restores Hyprland's prior reload/error settings, performs one reload, and restarts Waybar/Mako.
 
-There is no compatibility namespace for Omarchy. Myarch commands and state are native.
+There is no compatibility namespace for Omarchy. myarch commands and state are native.
 
 ## Configuration ownership
 
@@ -45,8 +45,8 @@ Wallpaper state is independent. `myarch theme set` rerenders configuration and d
 
 Waybar presents quiet status and critical Pocket controls. Richer operations go through `myarch menu` and Wofi/application/TUI surfaces. `myarch` dispatches commands as argv through Python subprocess APIs; it does not build shell strings from selections.
 
-Sesh, mydictation, NetworkManager, BlueZ, PipeWire, Tailscale, display-mode, Pocket scripts, and gpd-fanctl remain state authorities. Myarch only presents and delegates their verbs.
+Sesh, mydictation, NetworkManager, BlueZ, PipeWire, Tailscale, display-mode, Pocket scripts, and gpd-fanctl remain state authorities. myarch only presents and delegates their verbs.
 
 ## Myrig integration
 
-Myrig clones the repository in its common Mysetup phase. The `myarch` target depends on `wallpapers` and `rustdesk`; a thin pyinfra module invokes `install.sh --profile pocket4|ideapad`. Three shell shims source Myarch's zsh helpers into the existing myrig startup tree. No desktop implementation remains in myrig.
+Myrig clones the repository in its common Mysetup phase. The `myarch` target depends on `wallpapers` and `rustdesk`; a thin pyinfra module invokes `install.sh --profile pocket4|ideapad`. Three shell shims source myarch's zsh helpers into the existing myrig startup tree. No desktop implementation remains in myrig.

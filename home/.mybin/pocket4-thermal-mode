@@ -3,7 +3,7 @@
 #
 # A thin front-end over `pocket4-mode` (installed from github.com/lukastk/gpd-fanctl),
 # which sets CPU power limits, a frequency cap, --tctl-temp AND the fan curve from one
-# mode. See the pocket4 thermals section of Myarch's Pocket 4 documentation for why those are one
+# mode. See the pocket4 thermals section of myarch's Pocket 4 documentation for why those are one
 # control and not two.
 #
 #   quiet        8/8/12 W + 3.5 GHz cap + tctl 80 C, fan silent   — ~573 RPM idle

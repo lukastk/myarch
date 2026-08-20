@@ -1,11 +1,11 @@
-# Myarch
+# myarch
 
-Myarch is a reproducible, keyboard-first Arch Linux desktop built on Hyprland. It is the standalone desktop layer for two profiles:
+myarch is a reproducible, keyboard-first Arch Linux desktop built on Hyprland. It is the standalone desktop layer for two profiles:
 
 - `pocket4` — GPD Pocket 4, including transformed high-DPI display, touchscreen gestures, tablet scaling, on-screen keyboard, adaptive one/two-row bars, and thermal controls.
 - `ideapad` — Lenovo IdeaPad Slim 5, including native trackpad gestures and the same workspace/desktop model. The profile is implemented but must be deployed separately after Pocket 4 validation.
 
-Myarch began as an extraction of the Hyprland target from [`myrig`](https://github.com/lukastk/myrig). Its visual system is inspired by Omarchy's restrained, flat desktop design, while preserving the deeper machine-specific behavior already proven on the Pocket 4.
+myarch began as an extraction of the Hyprland target from [`myrig`](https://github.com/lukastk/myrig). Its visual system is inspired by Omarchy's restrained, flat desktop design, while preserving the deeper machine-specific behavior already proven on the Pocket 4.
 
 ## Design principles
 
@@ -14,7 +14,7 @@ Myarch began as an extraction of the Hyprland target from [`myrig`](https://gith
 - **Explicit profiles:** hardware differences are selected by `--profile pocket4|ideapad`; they are never guessed.
 - **Loud failures:** required external integrations and unexpected state fail visibly.
 - **Atomic configuration:** rendered files are replaced atomically while Hyprland autoreload is paused, followed by one coherent reload.
-- **Source ownership:** Myarch owns desktop packages/configuration; fleet composition and non-desktop services remain in myrig.
+- **Source ownership:** myarch owns desktop packages/configuration; fleet composition and non-desktop services remain in myrig.
 
 ## Features
 
@@ -33,7 +33,7 @@ Myarch began as an extraction of the Hyprland target from [`myrig`](https://gith
 
 ## Install
 
-Myarch supports Arch Linux and expects a live Hyprland session for the runtime plugin/reload phase.
+myarch supports Arch Linux and expects a live Hyprland session for the runtime plugin/reload phase.
 
 ```bash
 git clone https://github.com/lukastk/myarch.git ~/mysetup/myarch
@@ -52,7 +52,7 @@ Both profiles require:
 - `~/Pictures/wallpapers` — provisioned independently, because a private binary wallpaper collection does not belong in this public repository.
 - `~/mysetup/mydictation/install.sh` — the standalone dictation source/install integration.
 
-The Pocket profile also expects Myrig's system-level Pocket provisioning to have installed `wvkbd-deskintl` and `pocket4-mode`/`gpd-fanctl`. Myarch owns their desktop controls, not those hardware backends.
+The Pocket profile also expects Myrig's system-level Pocket provisioning to have installed `wvkbd-deskintl` and `pocket4-mode`/`gpd-fanctl`. myarch owns their desktop controls, not those hardware backends.
 
 ## Commands
 
@@ -75,7 +75,7 @@ myarch capture record [--fullscreen] [--audio none|desktop|microphone|both]
 myarch capture stop
 ```
 
-Important keybindings include `Super+R` (Myarch menu), `Super+Alt+Space` (applications), `Super+G` (overview), `Super+D` (dictation), `Super+V` (clipboard history), Print / `Super+Shift+S` (screenshots), and `Super+Ctrl+S` (capture menu). The complete catalogue is in [`docs/keybindings.tsv`](docs/keybindings.tsv) and available through `myarch keys`.
+Important keybindings include `Super+R` (myarch menu), `Super+Alt+Space` (applications), `Super+G` (overview), `Super+D` (dictation), `Super+V` (clipboard history), Print / `Super+Shift+S` (screenshots), and `Super+Ctrl+S` (capture menu). The complete catalogue is in [`docs/keybindings.tsv`](docs/keybindings.tsv) and available through `myarch keys`.
 
 ## Repository layout
 
@@ -107,4 +107,4 @@ Pocket validation additionally covers all four orientation/scale states, Hyprlan
 
 ## Attribution
 
-Myarch is MIT licensed. See [`NOTICE.md`](NOTICE.md) for Omarchy attribution and provenance notes.
+myarch is MIT licensed. See [`NOTICE.md`](NOTICE.md) for Omarchy attribution and provenance notes.
