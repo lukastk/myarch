@@ -217,6 +217,7 @@ class RenderTests(unittest.TestCase):
         self.assertIn('"sesh", "voxtype"', router)
         self.assertNotIn('"sesh", "mydictation-key"', router)
         self.assertIn("skip hyprland config errors: no running instance", router)
+        self.assertIn('["pgrep", "-x", "Hyprland"]', router)
         installer = (ROOT / "install.py").read_text()
         self.assertIn('VOXTYPE_RELEASE = "1.0.0-rc2"', installer)
         self.assertIn("425d650273220382f73a3bb4f8a563e0769f1c694eabb7c82701a919f44a689b", installer)

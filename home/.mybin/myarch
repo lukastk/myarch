@@ -331,22 +331,20 @@ def doctor() -> None:
         print(f"{'ok' if path else 'FAIL':4} {command}{' -> ' + path if path else ''}")
         failed |= path is None
 
-    instances_result = run(["hyprctl", "instances", "-j"], check=False, capture=True)
-    if instances_result.returncode != 0:
-        print(f"FAIL hyprland instances: {instances_result.stderr.strip()}")
+    compositor = run(["pgrep", "-x", "Hyprland"], check=False, capture=True)
+    if compositor.returncode == 1:
+        print("skip hyprland config errors: no running instance")
+    elif compositor.returncode != 0:
+        print(f"FAIL checking for a running Hyprland process: {compositor.stderr.strip()}")
+        failed = True
+    elif "HYPRLAND_INSTANCE_SIGNATURE" not in os.environ:
+        print("FAIL hyprland config errors: an instance is running but the session environment is missing")
         failed = True
     else:
-        instances = json.loads(instances_result.stdout)
-        if not instances:
-            print("skip hyprland config errors: no running instance")
-        elif "HYPRLAND_INSTANCE_SIGNATURE" not in os.environ:
-            print("FAIL hyprland config errors: an instance is running but the session environment is missing")
-            failed = True
-        else:
-            result = run(["hyprctl", "configerrors"], check=False, capture=True)
-            errors = result.stdout.strip()
-            print(f"{'FAIL' if errors else 'ok':4} hyprland config errors{': ' + errors if errors else ''}")
-            failed |= bool(errors)
+        result = run(["hyprctl", "configerrors"], check=False, capture=True)
+        errors = result.stdout.strip()
+        print(f"{'FAIL' if errors else 'ok':4} hyprland config errors{': ' + errors if errors else ''}")
+        failed |= bool(errors)
     raise SystemExit(1 if failed else 0)
 
 
