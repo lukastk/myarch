@@ -3,7 +3,7 @@
 myarch is a reproducible, keyboard-first Arch Linux desktop built on Hyprland. It is the standalone desktop layer for two profiles:
 
 - `pocket4` — GPD Pocket 4, including transformed high-DPI display, touchscreen gestures, tablet scaling, on-screen keyboard, adaptive one/two-row bars, and thermal controls.
-- `ideapad` — Lenovo IdeaPad Slim 5, including native trackpad gestures and the same workspace/desktop model. The profile is implemented but must be deployed separately after Pocket 4 validation.
+- `ideapad` — Lenovo IdeaPad Slim 5, including native trackpad gestures and the same workspace/desktop model; deployed after Pocket 4 validation on 2026-08-21.
 
 myarch began as an extraction of the Hyprland target from [`myrig`](https://github.com/lukastk/myrig). Its visual system is inspired by Omarchy's restrained, flat desktop design, while preserving the deeper machine-specific behavior already proven on the Pocket 4.
 

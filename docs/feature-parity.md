@@ -39,4 +39,4 @@ A myarch change is incomplete if it regresses any item below.
 
 ## Deployment policy
 
-Validate Pocket 4 first. IdeaPad deployment is a separate explicit greenlight, even though its profile and myrig target are committed at the same time.
+Pocket 4 was validated first; IdeaPad was deployed only after the separate explicit greenlight on 2026-08-21. Future profile deployments remain explicit rather than inferred from hardware.

@@ -49,4 +49,4 @@ Sesh, Voxtype, NetworkManager, BlueZ, PipeWire, Tailscale, display-mode, Pocket 
 
 ## Myrig integration
 
-Myrig clones the repository in its common Mysetup phase. The `myarch` target depends on `wallpapers` and `rustdesk`; a thin pyinfra module invokes `install.sh --profile pocket4|ideapad`. Three shell shims source myarch's zsh helpers into the existing myrig startup tree. No desktop implementation remains in myrig.
+Myrig clones the repository in its common Mysetup phase. The `myarch` target depends on `wallpapers`, `rustdesk`, and the shared `fonts` target; a thin pyinfra module invokes `install.sh --profile pocket4|ideapad`. Three shell shims source myarch's zsh helpers into the existing myrig startup tree. No desktop implementation remains in myrig.

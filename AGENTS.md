@@ -1,6 +1,6 @@
 # myarch development guide
 
-myarch is an Arch Linux/Hyprland desktop repository. It is installed on Pocket 4 and, only after explicit approval, IdeaPad.
+myarch is an Arch Linux/Hyprland desktop repository installed on Pocket 4 and IdeaPad. Deployments to either profile must remain explicit.
 
 ## Non-negotiable behavior
 
