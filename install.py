@@ -377,10 +377,12 @@ def prepare_external(profile: dict) -> None:
         raise RuntimeError(f"Voxtype Parakeet model is incomplete; missing: {missing}")
 
 
-def start_external(profile: dict) -> None:
+def start_external(profile: dict, environment: dict[str, str] | None) -> None:
     if profile["voxtype"]:
         run(["systemctl", "--user", "daemon-reload"])
-        run(["systemctl", "--user", "enable", "--now", "voxtype.service"])
+        run(["systemctl", "--user", "enable", "voxtype.service"])
+        if environment is not None:
+            run(["systemctl", "--user", "start", "voxtype.service"])
 
 
 def pause_autoreload(environment: dict[str, str] | None) -> tuple[bool, bool] | None:
@@ -460,7 +462,7 @@ def main() -> int:
         render_home(args.profile, profile, theme_name, theme)
         if not args.config_only:
             configure_system()
-            start_external(profile)
+            start_external(profile, environment)
             configure_plugins(profile, environment)
     finally:
         resume_autoreload(environment, previous)

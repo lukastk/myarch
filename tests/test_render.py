@@ -221,6 +221,9 @@ class RenderTests(unittest.TestCase):
         installer = (ROOT / "install.py").read_text()
         self.assertIn('VOXTYPE_RELEASE = "1.0.0-rc2"', installer)
         self.assertIn("425d650273220382f73a3bb4f8a563e0769f1c694eabb7c82701a919f44a689b", installer)
+        self.assertIn('start_external(profile, environment)', installer)
+        self.assertIn('if environment is not None:', installer)
+        self.assertNotIn('["systemctl", "--user", "enable", "--now", "voxtype.service"]', installer)
 
 
 if __name__ == "__main__":
