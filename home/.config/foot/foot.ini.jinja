@@ -1,5 +1,5 @@
-# myarch foot config (desktop) — same JetBrains Mono + "Arthur" colour
-# scheme as kitty.conf, so the two look identical.
+# myarch foot config (desktop) — same Ioskeley Mono Term + "Arthur" colour
+# scheme as kitty.conf and the macOS terminals, so all four look identical.
 #
 # WHY foot EXISTS ALONGSIDE kitty: kitty does not translate touchscreen taps
 # into terminal mouse reports, so tapping inside a TUI (tmux panes, for example)
@@ -14,10 +14,10 @@
 
 # Explicit fallback chain. foot does NOT walk fontconfig's fallback list on its
 # own the way kitty does — it uses the comma-separated fonts listed here, in
-# order, for glyphs the primary font lacks. Without this, symbols outside
-# JetBrains Mono (e.g. U+23F5 "⏵", which Claude Code uses in its status line)
-# render as underscores.
-font=JetBrainsMono Nerd Font:size=11, Symbols Nerd Font Mono:size=11, Noto Sans Symbols 2:size=11, Adwaita Mono:size=11
+# order, for glyphs the primary font lacks. Ioskeley's Nerd Font build carries
+# the prompt icons; the remaining faces cover symbols outside it, such as U+23F5
+# "⏵" in Claude Code's status line.
+font=IoskeleyMonoTerm Nerd Font Mono:size=11, Symbols Nerd Font Mono:size=11, Noto Sans Symbols 2:size=11, Adwaita Mono:size=11
 
 [scrollback]
 lines=10000

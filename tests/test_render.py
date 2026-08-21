@@ -158,6 +158,23 @@ class RenderTests(unittest.TestCase):
         self.assertNotIn("shell=True", picker)
         compile(picker, picker_path.as_posix(), "exec")
 
+    def test_monospace_surfaces_use_ioskeley(self) -> None:
+        family = "IoskeleyMonoTerm Nerd Font Mono"
+        surfaces = [
+            ROOT / "home/.config/foot/foot.ini.jinja",
+            ROOT / "home/.config/kitty/kitty.conf.jinja",
+            ROOT / "home/.config/mako/config.jinja",
+            ROOT / "home/.config/hypr/hyprlock.conf.jinja",
+            ROOT / "home/.config/waybar/style.css.jinja",
+        ]
+        for surface in surfaces:
+            with self.subTest(surface=surface):
+                self.assertIn(family, surface.read_text())
+                self.assertNotIn("JetBrainsMono", surface.read_text())
+        installer = (ROOT / "install.py").read_text()
+        self.assertIn(f'MONO_FONT_FAMILY = "{family}"', installer)
+        self.assertIn("require_mono_font()", installer)
+        self.assertNotIn("ttf-jetbrains-mono-nerd", (ROOT / "install.sh").read_text())
 
     def test_voxtype_config_and_adapter_preserve_dictation_contract(self) -> None:
         config_template = ROOT / "home/.config/voxtype/config.toml.jinja"

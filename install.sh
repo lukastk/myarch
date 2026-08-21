@@ -55,7 +55,7 @@ if [[ $config_only == false ]]; then
     brightnessctl hyprsunset playerctl pavucontrol pipewire-alsa
     network-manager-applet networkmanager blueman bluez bluez-utils bluetui
     kitty foot xdg-utils
-    ttf-jetbrains-mono-nerd noto-fonts noto-fonts-emoji noto-fonts-cjk
+    noto-fonts noto-fonts-emoji noto-fonts-cjk
     ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols-common otf-font-awesome gsfonts
     keyd python-jinja jq fzf shellcheck util-linux cpio cmake git meson ninja pkgconf glm
   )

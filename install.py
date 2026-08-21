@@ -50,11 +50,25 @@ VOXTYPE_ARTIFACTS = {
         "425d650273220382f73a3bb4f8a563e0769f1c694eabb7c82701a919f44a689b",
     ),
 }
+MONO_FONT_FAMILY = "IoskeleyMonoTerm Nerd Font Mono"
 
 
 def run(argv: list[str], *, check: bool = True, capture: bool = False, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     print("+", " ".join(argv))
     return subprocess.run(argv, check=check, text=True, capture_output=capture, env=env)
+
+
+def require_mono_font() -> None:
+    resolved = run(
+        ["fc-match", "--format=%{family}\\n", MONO_FONT_FAMILY],
+        capture=True,
+    ).stdout.splitlines()
+    families = {family.strip() for line in resolved for family in line.split(",")}
+    if MONO_FONT_FAMILY not in families:
+        raise RuntimeError(
+            f"required font is missing: {MONO_FONT_FAMILY}; "
+            "run the myrig fonts target before installing myarch"
+        )
 
 
 def read_toml(path: Path) -> dict:
@@ -435,6 +449,7 @@ def main() -> int:
         if not theme_name:
             raise SystemExit(f"theme state is empty: {THEME_STATE}")
     theme = load_theme(theme_name)
+    require_mono_font()
     environment = None if args.skip_runtime else live_hyprland_env()
     migrate_myrig_state()
     previous = pause_autoreload(environment)

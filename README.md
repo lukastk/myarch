@@ -47,8 +47,10 @@ The first installation defaults to the `arthur` theme. Select explicitly with `-
 
 ### External profile contracts
 
-Both profiles require `~/Pictures/wallpapers`, provisioned independently because
-the private wallpaper collection does not belong in this public repository.
+Both profiles require `~/Pictures/wallpapers` and the
+`IoskeleyMonoTerm Nerd Font Mono` family. Myrig provisions the private wallpaper
+collection and the pinned Ioskeley Mono release through independent targets because
+neither shared cross-platform asset belongs in this desktop repository.
 Voxtype's companion files come from the official `voxtype-bin` AUR package. This
 experiment pins the official `1.0.0-rc2` ONNX binary by SHA-256 because stable
 `0.7.5` cannot save floating-point settings from its TUI ([upstream issue
