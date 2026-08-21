@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import filecmp
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -20,6 +21,7 @@ import subprocess
 import sys
 import tempfile
 import tomllib
+import urllib.request
 
 from jinja2 import Environment, StrictUndefined
 
@@ -36,6 +38,17 @@ REQUIRED_THEME_KEYS = {
     "accent", "accent_alt", "urgent", "warning", "success", "quiet", "chill",
     "performance", "recording", "transcribing", "cleaning", "injecting",
     "selection_background", "selection_foreground", "cursor", "cursor_text", "palette",
+}
+VOXTYPE_RELEASE = "1.0.0-rc2"
+VOXTYPE_ARTIFACTS = {
+    "avx2": (
+        "voxtype-1.0.0-rc2-linux-x86_64-onnx-avx2",
+        "46614751fdc960bc8b9ddae478cb792c794efc8827315942ddd181e11883fb48",
+    ),
+    "avx512": (
+        "voxtype-1.0.0-rc2-linux-x86_64-onnx-avx512",
+        "425d650273220382f73a3bb4f8a563e0769f1c694eabb7c82701a919f44a689b",
+    ),
 }
 
 
@@ -276,16 +289,84 @@ def configure_plugins(profile: dict, environment: dict[str, str] | None) -> None
         run(["hyprpm", "enable", name], env=environment)
 
 
-def install_external(profile: dict) -> None:
+def stop_replaced_dictation() -> None:
+    """Stop the old daemon before its generated configuration is retired."""
+    old_cli = shutil.which("mydictation")
+    if old_cli is not None:
+        run([old_cli, "daemon", "stop"], check=False)
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def install_voxtype_release(variant: str) -> Path:
+    artifact, expected_sha256 = VOXTYPE_ARTIFACTS[variant]
+    destination = Path("/usr/local/lib/myarch") / artifact
+    if not destination.is_file() or sha256(destination) != expected_sha256:
+        cache = STATE / "downloads" / artifact
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        if not cache.is_file() or sha256(cache) != expected_sha256:
+            url = f"https://github.com/peteonrails/voxtype/releases/download/v{VOXTYPE_RELEASE}/{artifact}"
+            with tempfile.NamedTemporaryFile(
+                "wb", dir=cache.parent, prefix=f".{artifact}.", delete=False
+            ) as stream:
+                temporary = Path(stream.name)
+            try:
+                with urllib.request.urlopen(url, timeout=60) as response:
+                    with temporary.open("wb") as stream:
+                        shutil.copyfileobj(response, stream)
+                actual_sha256 = sha256(temporary)
+                if actual_sha256 != expected_sha256:
+                    raise RuntimeError(
+                        f"Voxtype {VOXTYPE_RELEASE} checksum mismatch: "
+                        f"expected {expected_sha256}, got {actual_sha256}"
+                    )
+                os.replace(temporary, cache)
+            finally:
+                temporary.unlink(missing_ok=True)
+        run(["sudo", "install", "-Dm755", cache.as_posix(), destination.as_posix()])
+    run(["sudo", "ln", "-sfn", destination.as_posix(), "/usr/bin/voxtype"])
+    return destination
+
+
+def prepare_external(profile: dict) -> None:
     wallpaper_dir = Path(profile["external"]["wallpaper_directory"]).expanduser()
     if not wallpaper_dir.is_dir():
         raise RuntimeError(f"required wallpaper directory is missing: {wallpaper_dir}")
-    if profile["mydictation"]:
-        source = Path(profile["external"]["mydictation_source"]).expanduser()
-        installer = source / "install.sh"
-        if not installer.is_file():
-            raise RuntimeError(f"required mydictation installer is missing: {installer}")
-        run([installer.as_posix()])
+    if not profile["voxtype"]:
+        return
+
+    run(["systemctl", "--user", "stop", "voxtype.service"], check=False)
+    cpu_flags = Path("/proc/cpuinfo").read_text()
+    variant = "avx512" if "avx512f" in cpu_flags else "avx2"
+    binary = install_voxtype_release(variant)
+    version = run([binary.as_posix(), "--version"], capture=True).stdout.strip()
+    if version != "voxtype 1.0.0":
+        raise RuntimeError(f"unexpected Voxtype {VOXTYPE_RELEASE} version output: {version!r}")
+    model_dir = HOME / ".local/share/voxtype/models/parakeet-tdt-0.6b-v3-int8"
+    model_files = (
+        "encoder-model.int8.onnx", "decoder_joint-model.int8.onnx",
+        "vocab.txt", "config.json",
+    )
+    if not all((model_dir / name).is_file() for name in model_files):
+        run([
+            "voxtype", "setup", "--download", "--no-post-install",
+            "--model", "parakeet-tdt-0.6b-v3-int8",
+        ])
+    missing = [name for name in model_files if not (model_dir / name).is_file()]
+    if missing:
+        raise RuntimeError(f"Voxtype Parakeet model is incomplete; missing: {missing}")
+
+
+def start_external(profile: dict) -> None:
+    if profile["voxtype"]:
+        run(["systemctl", "--user", "daemon-reload"])
+        run(["systemctl", "--user", "enable", "--now", "voxtype.service"])
 
 
 def pause_autoreload(environment: dict[str, str] | None) -> tuple[bool, bool] | None:
@@ -358,10 +439,13 @@ def main() -> int:
     migrate_myrig_state()
     previous = pause_autoreload(environment)
     try:
+        stop_replaced_dictation()
+        if not args.config_only:
+            prepare_external(profile)
         render_home(args.profile, profile, theme_name, theme)
         if not args.config_only:
             configure_system()
-            install_external(profile)
+            start_external(profile)
             configure_plugins(profile, environment)
     finally:
         resume_autoreload(environment, previous)

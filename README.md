@@ -24,9 +24,9 @@ myarch began as an extraction of the Hyprland target from [`myrig`](https://gith
 - Omarchy-inspired minimalist Waybar with a collapsed tray and state-driven indicators
 - Four Pocket bar states: 1600/1280/1000/800 logical pixels, with one/two-row and compact layouts
 - Pocket display rotation coupled to touchscreen transform, explicit tablet scaling, OSK, gaps, and thermal controls
-- `mydictation` hold/latch/cleanup workflow and touch controls
+- Voxtype-powered local Parakeet dictation with preserved hold/latch/cleanup shortcuts and touch controls
 - Display layouts, sub-backlight gamma dimming, wallpaper rotation/pinning, idle inhibition, lock/idle policy, and graphical-session environment repair
-- Unified `myarch menu`, keybinding catalogue, themes, audio/network/Bluetooth/display/power/Tailscale control surfaces
+- Unified `myarch menu`, keybinding catalogue, themes, PipeWire input picker, and audio/network/Bluetooth/display/power/Tailscale control surfaces
 - Screenshot, OCR, QR, colour, and GPU screen-recording workflows
 - Arthur, Tokyo Night, and Matte Black semantic themes across the bar, borders, terminals, notifications, and lock screen
 - Idempotent package/config/system/plugin installer with profile tests and secret scanning
@@ -47,10 +47,14 @@ The first installation defaults to the `arthur` theme. Select explicitly with `-
 
 ### External profile contracts
 
-Both profiles require:
-
-- `~/Pictures/wallpapers` — provisioned independently, because a private binary wallpaper collection does not belong in this public repository.
-- `~/mysetup/mydictation/install.sh` — the standalone dictation source/install integration.
+Both profiles require `~/Pictures/wallpapers`, provisioned independently because
+the private wallpaper collection does not belong in this public repository.
+Voxtype's companion files come from the official `voxtype-bin` AUR package. This
+experiment pins the official `1.0.0-rc2` ONNX binary by SHA-256 because stable
+`0.7.5` cannot save floating-point settings from its TUI ([upstream issue
+#451](https://github.com/peteonrails/voxtype/issues/451)); the release candidate
+contains the upstream fix. The installer requires `paru` and downloads the
+quantized Parakeet v3 model on first use.
 
 The Pocket profile also expects Myrig's system-level Pocket provisioning to have installed `wvkbd-deskintl` and `pocket4-mode`/`gpd-fanctl`. myarch owns their desktop controls, not those hardware backends.
 

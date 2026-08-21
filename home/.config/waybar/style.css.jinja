@@ -226,21 +226,19 @@ window#waybar.hidden { opacity: 0.25; }
 
 /* Dictation remains unmistakable: these colours encode microphone/processing
  * state and are safety information, not decoration. */
-#custom-mydictation {
+#custom-voxtype {
   color: @background;
   font-weight: bold;
   min-height: 38px;
   padding: 0 10px;
 }
-#custom-mydictation.idle { min-height: 0; padding: 0; background: transparent; }
-#custom-mydictation.recording { background: {{ theme.recording }}; color: #ffffff; padding: 0 15px; }
-#custom-mydictation.transcribing { background: {{ theme.transcribing }}; }
-#custom-mydictation.cleaning { background: {{ theme.cleaning }}; }
-#custom-mydictation.injecting { background: {{ theme.injecting }}; }
+#custom-voxtype.idle { min-height: 0; padding: 0; background: transparent; }
+#custom-voxtype.recording { background: {{ theme.recording }}; color: #ffffff; padding: 0 15px; }
+#custom-voxtype.transcribing { background: {{ theme.transcribing }}; }
 
-#custom-mydictation-start,
-#custom-mydictation-cleanup,
-#custom-mydictation-cancel {
+#custom-voxtype-start,
+#custom-voxtype-cleanup,
+#custom-voxtype-cancel {
   min-width: 76px;
   min-height: 38px;
   padding: 0 10px;
@@ -250,17 +248,17 @@ window#waybar.hidden { opacity: 0.25; }
   background: @surface;
   font-size: 15px;
 }
-#custom-mydictation-start { color: @background; background: @accent; }
-#custom-mydictation-cleanup.on { color: @background; background: {{ theme.cleaning }}; }
-#custom-mydictation-cleanup.off { color: {{ theme.cleaning }}; }
-#custom-mydictation-cancel { color: @urgent; box-shadow: inset 0 0 0 1px @urgent; background: transparent; }
-#custom-mydictation-cancel:hover { color: #ffffff; background: @urgent; }
-#custom-mydictation-start.hidden,
-#custom-mydictation-cleanup.hidden,
-#custom-mydictation-cancel.hidden,
-window#waybar.narrow-bottom #custom-mydictation-start.hidden,
-window#waybar.narrow-bottom #custom-mydictation-cleanup.hidden,
-window#waybar.narrow-bottom #custom-mydictation-cancel.hidden {
+#custom-voxtype-start { color: @background; background: @accent; }
+#custom-voxtype-cleanup.on { color: @background; background: {{ theme.cleaning }}; }
+#custom-voxtype-cleanup.off { color: {{ theme.cleaning }}; }
+#custom-voxtype-cancel { color: @urgent; box-shadow: inset 0 0 0 1px @urgent; background: transparent; }
+#custom-voxtype-cancel:hover { color: #ffffff; background: @urgent; }
+#custom-voxtype-start.hidden,
+#custom-voxtype-cleanup.hidden,
+#custom-voxtype-cancel.hidden,
+window#waybar.narrow-bottom #custom-voxtype-start.hidden,
+window#waybar.narrow-bottom #custom-voxtype-cleanup.hidden,
+window#waybar.narrow-bottom #custom-voxtype-cancel.hidden {
   min-width: 0;
   min-height: 0;
   padding: 0;
@@ -268,9 +266,9 @@ window#waybar.narrow-bottom #custom-mydictation-cancel.hidden {
   background: transparent;
   box-shadow: none;
 }
-window#waybar.narrow-bottom #custom-mydictation-start,
-window#waybar.narrow-bottom #custom-mydictation-cleanup,
-window#waybar.narrow-bottom #custom-mydictation-cancel { min-width: 54px; }
+window#waybar.narrow-bottom #custom-voxtype-start,
+window#waybar.narrow-bottom #custom-voxtype-cleanup,
+window#waybar.narrow-bottom #custom-voxtype-cancel { min-width: 54px; }
 
 #custom-recording.active { color: #ffffff; background: @urgent; font-weight: bold; }
 #custom-recording.inactive { min-width: 0; min-height: 0; padding: 0; }

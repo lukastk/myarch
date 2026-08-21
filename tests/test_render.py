@@ -142,9 +142,63 @@ class RenderTests(unittest.TestCase):
             "Super+G": 'mainMod .. " + G"',
             "Super+V": 'mainMod .. " + V"',
             "Super+Ctrl+S": 'mainMod .. " + CTRL + S"',
+            "Super+Ctrl+I": 'mainMod .. " + CTRL + I"',
         }.items():
             self.assertIn(chord, docs)
             self.assertIn(source_token, source)
+
+    def test_audio_input_picker_uses_pipewire_sources(self) -> None:
+        picker_path = ROOT / "home/.mybin/audio-input"
+        picker = picker_path.read_text()
+        self.assertTrue(picker_path.stat().st_mode & 0o100)
+        self.assertIn('["pactl", "--format=json", "list", "sources"]', picker)
+        self.assertIn('["pactl", "set-default-source", selected]', picker)
+        self.assertIn('"--with-nth=1"', picker)
+        self.assertIn("source['name'] == current", picker)
+        self.assertNotIn("shell=True", picker)
+        compile(picker, picker_path.as_posix(), "exec")
+
+
+    def test_voxtype_config_and_adapter_preserve_dictation_contract(self) -> None:
+        config_template = ROOT / "home/.config/voxtype/config.toml.jinja"
+        adapter_template = ROOT / "home/.mybin/voxtype-key.jinja"
+        for profile, expected_volume in (("pocket4", "25%"), ("ideapad", "unchanged")):
+            context = self.context(profile)
+            rendered_config = self.env.from_string(config_template.read_text()).render(**context)
+            config = tomllib.loads(rendered_config)
+            with self.subTest(profile=profile):
+                self.assertEqual("parakeet", config["engine"])
+                self.assertFalse(config["hotkey"]["enabled"])
+                self.assertFalse(config["output"]["fallback_to_clipboard"])
+                self.assertEqual(["wtype"], config["output"]["driver_order"])
+                self.assertIsInstance(config["audio"]["feedback"]["volume"], float)
+                self.assertIn("cleanup", config["profiles"])
+                self.assertIn("raw", config["profiles"])
+
+                adapter = self.env.from_string(adapter_template.read_text()).render(**context)
+                self.assertIn(f'CAPTURE_VOLUME = "{expected_volume}"', adapter)
+                self.assertIn('[VOXTYPE, "record", "start"]', adapter)
+                self.assertIn('[VOXTYPE, "record", command]', adapter)
+                self.assertIn('HOLD_THRESHOLD_SECONDS = 0.350', adapter)
+                self.assertIn("orphan_release_at", adapter)
+                self.assertIn('["systemctl", "--user", "restart", "voxtype.service"]', adapter)
+                self.assertNotIn("shell=True", adapter)
+                compile(adapter, adapter_template.as_posix(), "exec")
+
+    def test_voxtype_replaces_mydictation_runtime_ownership(self) -> None:
+        for profile_name in ("pocket4", "ideapad"):
+            with (ROOT / "profiles" / f"{profile_name}.toml").open("rb") as stream:
+                profile = tomllib.load(stream)
+            self.assertTrue(profile["voxtype"])
+            self.assertNotIn("mydictation", profile)
+        self.assertFalse((ROOT / "home/.config/mydictation/config.toml.jinja").exists())
+        service = (ROOT / "home/.config/systemd/user/voxtype.service").read_text()
+        self.assertIn("ExecStart=%h/.mybin/voxtype-daemon", service)
+        cleanup = (ROOT / "home/.mybin/voxtype-cleanup").read_text()
+        compile(cleanup, "voxtype-cleanup", "exec")
+        installer = (ROOT / "install.py").read_text()
+        self.assertIn('VOXTYPE_RELEASE = "1.0.0-rc2"', installer)
+        self.assertIn("425d650273220382f73a3bb4f8a563e0769f1c694eabb7c82701a919f44a689b", installer)
 
 
 if __name__ == "__main__":

@@ -2,12 +2,14 @@ name = "ideapad"
 terminal = "kitty"
 battery = "BAT1"
 touchscreen = false
-mydictation = true
+voxtype = true
+
+[dictation]
+source_volume = "unchanged"
 
 [plugins]
 hyprexpo = true
 hyprgrass = false
 
 [external]
-mydictation_source = "~/mysetup/mydictation"
 wallpaper_directory = "~/Pictures/wallpapers"

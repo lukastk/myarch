@@ -1,0 +1,69 @@
+# Voxtype — https://voxtype.io/
+# Rendered by myarch for compositor-controlled dictation.
+# Use `voxtype configure` (Super+Ctrl+D) for experiments, but rerunning myarch
+# restores this profile's tested defaults.
+
+engine = "parakeet"
+state_file = "auto"
+
+[hotkey]
+# Hyprland owns the key edges. This avoids evdev permissions and lets the
+# myarch adapter preserve the existing hold-to-talk / tap-to-latch gesture.
+enabled = false
+key = "SCROLLLOCK"
+modifiers = []
+mode = "push_to_talk"
+
+[audio]
+device = "default"
+sample_rate = 16000
+max_duration_secs = 300
+pause_media = true
+
+[audio.feedback]
+enabled = false
+theme = "default"
+volume = 0.7
+
+[parakeet]
+model = "parakeet-tdt-0.6b-v3-int8"
+model_type = "tdt"
+on_demand_loading = false
+
+[output]
+mode = "type"
+# The desktop contract requires wtype. A broken injector must remain visible,
+# rather than quietly putting text on the clipboard.
+fallback_to_clipboard = false
+driver_order = ["wtype"]
+type_delay_ms = 0
+pre_type_delay_ms = 100
+wait_for_modifier_release = false
+
+[output.notification]
+on_recording_start = false
+on_recording_stop = false
+on_transcription = true
+urgency = "normal"
+
+[text]
+spoken_punctuation = false
+filter_filler_words = false
+smart_auto_submit = false
+
+[vad]
+enabled = false
+
+[status]
+icon_theme = "minimal"
+
+# Super+Shift+D selects this profile before recording. Super+Alt+D can switch
+# an in-progress recording between cleanup and raw by selecting one of these
+# profiles; Voxtype consumes the selected profile when transcription finishes.
+[profiles.cleanup]
+post_process_command = "{{ home }}/.mybin/voxtype-cleanup"
+post_process_timeout_ms = 120000
+
+[profiles.raw]
+post_process_command = "cat"
+post_process_timeout_ms = 5000

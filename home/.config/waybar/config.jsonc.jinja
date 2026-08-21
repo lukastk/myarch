@@ -31,15 +31,12 @@
 {% endif %}
   ],
   "modules-center": [
-    // Dictation sits immediately left of the workspaces, in the centre where it
-    // is easy to hit without looking. The start button shows only while idle
-    // and cancel/cleanup only while recording, so exactly one of the two
-    // groups is ever on the bar and the workspaces do not shift far. The REC
-    // indicator doubles as the finish button, so there is no separate one.
-    "custom/mydictation-start",
-    "custom/mydictation",
-    "custom/mydictation-cleanup",
-    "custom/mydictation-cancel",
+    // Dictation sits immediately left of the workspaces. Voxtype controls only
+    // meaningful in the current phase take width, and REC doubles as finish.
+    "custom/voxtype-start",
+    "custom/voxtype",
+    "custom/voxtype-cleanup",
+    "custom/voxtype-cancel",
     "custom/recording",
 {% if 'pocket4' in targets %}
     "group/workspaces"

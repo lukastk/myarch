@@ -2,12 +2,14 @@ name = "pocket4"
 terminal = "foot"
 battery = "BATT"
 touchscreen = true
-mydictation = true
+voxtype = true
+
+[dictation]
+source_volume = "25%"
 
 [plugins]
 hyprexpo = true
 hyprgrass = true
 
 [external]
-mydictation_source = "~/mysetup/mydictation"
 wallpaper_directory = "~/Pictures/wallpapers"

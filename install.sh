@@ -52,14 +52,20 @@ if [[ $config_only == false ]]; then
     waybar wofi mako libnotify
     grim slurp hyprpicker cliphist wl-clipboard
     tesseract tesseract-data-eng zbar gpu-screen-recorder ffmpeg ffmpegthumbnailer
-    brightnessctl hyprsunset playerctl pavucontrol
+    brightnessctl hyprsunset playerctl pavucontrol pipewire-alsa
     network-manager-applet networkmanager blueman bluez bluez-utils bluetui
     kitty foot xdg-utils
     ttf-jetbrains-mono-nerd noto-fonts noto-fonts-emoji noto-fonts-cjk
     ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols-common otf-font-awesome gsfonts
-    keyd python-jinja jq shellcheck util-linux cpio cmake git meson ninja pkgconf glm
+    keyd python-jinja jq fzf shellcheck util-linux cpio cmake git meson ninja pkgconf glm
   )
   sudo pacman -S --noconfirm --needed "${packages[@]}"
+
+  if ! command -v paru >/dev/null 2>&1; then
+    echo "Voxtype installation requires paru for the official voxtype-bin AUR package" >&2
+    exit 1
+  fi
+  paru -S --noconfirm --needed voxtype-bin
 fi
 
 args=(--profile "$profile")

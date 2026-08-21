@@ -296,54 +296,43 @@
     "on-click": "{{ home }}/.mybin/pocket4-osk toggle"
   },
 {% endif %}
-  // mydictation status. Streams one JSON object per state change and keeps
-  // running, so this is push-driven — no interval, no polling, no signal.
-  // Renders nothing at all while idle. restart-interval covers the daemon
-  // exiting when it has been idle a while; the client reconnects by itself.
-  // The status indicator IS the finish button: it already shows "REC 0:07" for
-  // the whole of a recording, so clicking it stops and transcribes. That is why
-  // there is no separate finish module — it would have spent bar width saying
-  // the same thing twice.
-  "custom/mydictation": {
-    "exec": "{{ home }}/.local/bin/mydictation-key waybar",
+  // Voxtype status and touch controls. voxtype-key transforms Voxtype's
+  // follow stream into the existing compact, phase-aware controls and preserves
+  // the cleanup-profile state owned by the compositor adapter.
+  "custom/voxtype": {
+    "exec": "{{ home }}/.mybin/voxtype-key waybar",
     "return-type": "json",
     "restart-interval": 2,
+    "signal": 12,
     "tooltip": false,
-    "on-click": "{{ home }}/.local/bin/mydictation-key stop"
+    "on-click": "{{ home }}/.mybin/voxtype-key stop"
   },
 
-  // Dictation controls. Each is its own module because a waybar custom module
-  // renders exactly one label, and these are meant to be separate buttons you
-  // can hit rather than three mouse buttons hidden on the indicator above.
-  //
-  // `--role` decides which glyph a module draws and, crucially, in which phases
-  // it draws anything at all: empty text hides a custom module, so `start` is
-  // present only while idle and the other three only while recording. The bar
-  // therefore only ever offers actions that currently mean something.
-  //
-  // Each holds its own subscription to the daemon. That is already how the
-  // indicator works, and a subscriber keeps the daemon alive -- which on a
-  // machine using the local backend is what keeps the model warm.
-  "custom/mydictation-start": {
-    "exec": "{{ home }}/.local/bin/mydictation-key waybar --role start",
+  // Only actions meaningful in the current phase take bar width. The status
+  // indicator doubles as the finish button while recording.
+  "custom/voxtype-start": {
+    "exec": "{{ home }}/.mybin/voxtype-key waybar --role start",
     "return-type": "json",
     "restart-interval": 2,
+    "signal": 12,
     "tooltip": false,
-    "on-click": "{{ home }}/.local/bin/mydictation-key start"
+    "on-click": "{{ home }}/.mybin/voxtype-key start"
   },
-  "custom/mydictation-cleanup": {
-    "exec": "{{ home }}/.local/bin/mydictation-key waybar --role cleanup",
+  "custom/voxtype-cleanup": {
+    "exec": "{{ home }}/.mybin/voxtype-key waybar --role cleanup",
     "return-type": "json",
     "restart-interval": 2,
+    "signal": 12,
     "tooltip": false,
-    "on-click": "{{ home }}/.local/bin/mydictation-key cleanup toggle"
+    "on-click": "{{ home }}/.mybin/voxtype-key cleanup toggle"
   },
-  "custom/mydictation-cancel": {
-    "exec": "{{ home }}/.local/bin/mydictation-key waybar --role cancel",
+  "custom/voxtype-cancel": {
+    "exec": "{{ home }}/.mybin/voxtype-key waybar --role cancel",
     "return-type": "json",
     "restart-interval": 2,
+    "signal": 12,
     "tooltip": false,
-    "on-click": "{{ home }}/.local/bin/mydictation-key cancel"
+    "on-click": "{{ home }}/.mybin/voxtype-key cancel"
   },
   // Screen recording is signal-driven: the capture command sends RTMIN+11 on
   // start/stop, and an empty text field removes the module while inactive.

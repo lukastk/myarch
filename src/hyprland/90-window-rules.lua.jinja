@@ -57,25 +57,23 @@ hl.window_rule({
     float = true,
 })
 
--- The Super+N / Super+Shift+N connectivity TUIs, on the same reasoning as the
--- wallpaper picker above: a transient chooser should not join the tiling grid
--- and reflow what you were working in. Float only — size comes from the
--- terminal's character-cell sizing, and no `center` rule, because Hyprland
--- already places these identically with and without one (measured for the
--- picker above; these are the same kind of window).
+-- The Super+N / Super+Shift+N connectivity TUIs and Super+Ctrl+I input
+-- chooser, on the same reasoning as the wallpaper picker above: a transient
+-- chooser should not join the tiling grid and reflow what you were working in.
+-- Float only — size comes from the terminal's character-cell sizing, and no
+-- `center` rule, because Hyprland already places these identically with and
+-- without one (measured for the picker above; these are the same kind of window).
 hl.window_rule({
     name  = "float-connectivity-tui",
-    match = { class = "^(net-tui|bt-tui)$" },
+    match = { class = "^(net-tui|bt-tui|audio-input-pick)$" },
     float = true,
 })
 
--- The Super+Ctrl+D mydictation settings TUI, same reasoning again: a transient
--- settings screen has no business reflowing the windows you were dictating
--- into. Float only, size from the terminal's character cells, no `center` rule
--- (measured as a no-op for the picker above; this is the same kind of window).
+-- The Super+Ctrl+D Voxtype settings TUI is transient and must not reflow the
+-- windows the user was dictating into.
 hl.window_rule({
-    name  = "float-mydictation-settings",
-    match = { class = "^mydictation-settings$" },
+    name  = "float-voxtype-settings",
+    match = { class = "^voxtype-settings$" },
     float = true,
 })
 

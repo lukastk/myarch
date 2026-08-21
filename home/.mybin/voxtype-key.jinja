@@ -1,0 +1,457 @@
+#!/usr/bin/env python3
+"""myarch's compositor and touch adapter for Voxtype.
+
+Voxtype remains the recorder/transcriber/output authority. This adapter preserves
+myarch's existing hold-to-talk / tap-to-latch gesture, Pocket microphone gain
+transaction, cleanup-profile shortcuts, and touch-safe Waybar controls.
+"""
+
+from __future__ import annotations
+
+import argparse
+import contextlib
+import fcntl
+import json
+import os
+from pathlib import Path
+import re
+import signal
+import subprocess
+import sys
+import time
+import uuid
+
+HOLD_THRESHOLD_SECONDS = 0.350
+CAPTURE_VOLUME = {{ profile.dictation.source_volume | tojson }}
+RUNTIME = Path(os.environ["XDG_RUNTIME_DIR"]) / "myarch" / "voxtype"
+STATE = RUNTIME / "session.json"
+LOCK = RUNTIME / "lock"
+VOXTYPE = "/usr/bin/voxtype"
+ALLOWED_PHASES = {"", "idle", "recording", "transcribing", "stopped"}
+_VOLUME_RE = re.compile(r"(\d+)\s*/\s*\d+%")
+
+
+def run(argv: list[str], *, check: bool = True, capture: bool = False) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(argv, check=check, text=True, capture_output=capture)
+
+
+def stop_child(process: subprocess.Popen[str]) -> None:
+    if process.poll() is not None:
+        return
+    # `voxtype status --follow` has no state to flush. Kill it synchronously so
+    # Waybar restarts cannot leave a follower reparented to PID 1.
+    process.kill()
+    process.wait(timeout=2)
+
+
+def install_child_signal_handlers(process: subprocess.Popen[str]) -> None:
+    terminating = False
+
+    def handle(signum, _frame):
+        nonlocal terminating
+        if terminating:
+            return
+        terminating = True
+        stop_child(process)
+        raise SystemExit(128 + signum)
+
+    signal.signal(signal.SIGTERM, handle)
+    signal.signal(signal.SIGINT, handle)
+
+
+def notify(summary: str, body: str, *, critical: bool = False) -> None:
+    argv = ["notify-send"]
+    if critical:
+        argv += ["-u", "critical"]
+    run(argv + [summary, body], check=False)
+
+
+def signal_waybar() -> None:
+    run(["pkill", "-RTMIN+12", "waybar"], check=False)
+
+
+def prepare_runtime() -> None:
+    RUNTIME.mkdir(mode=0o700, parents=True, exist_ok=True)
+    os.chmod(RUNTIME, 0o700)
+
+
+@contextlib.contextmanager
+def locked():
+    prepare_runtime()
+    with LOCK.open("a+") as stream:
+        fcntl.flock(stream, fcntl.LOCK_EX)
+        yield
+
+
+def read_state() -> dict:
+    if not STATE.is_file():
+        return {}
+    value = json.loads(STATE.read_text())
+    if not isinstance(value, dict):
+        raise RuntimeError(f"invalid Voxtype adapter state: {STATE}")
+    return value
+
+
+def write_state(value: dict) -> None:
+    temporary = STATE.with_suffix(".tmp")
+    temporary.write_text(json.dumps(value, sort_keys=True) + "\n")
+    os.replace(temporary, STATE)
+
+
+def clear_state() -> None:
+    STATE.unlink(missing_ok=True)
+
+
+def normalize_phase(value: object) -> str:
+    if value not in ALLOWED_PHASES:
+        raise RuntimeError(f"Voxtype returned an unknown phase: {value!r}")
+    return "idle" if value in {"", "stopped"} else str(value)
+
+
+def phase() -> str:
+    result = run([VOXTYPE, "status", "--format", "json"], capture=True)
+    payload = json.loads(result.stdout)
+    return normalize_phase(payload.get("alt"))
+
+
+def ensure_daemon() -> None:
+    run(["systemctl", "--user", "start", "voxtype.service"])
+    last_error: Exception | None = None
+    for _ in range(50):
+        try:
+            phase()
+            return
+        except (subprocess.CalledProcessError, json.JSONDecodeError, RuntimeError) as exc:
+            last_error = exc
+            time.sleep(0.1)
+    raise RuntimeError(f"Voxtype daemon did not become ready: {last_error}")
+
+
+def get_source_volume() -> str:
+    result = run(
+        ["pactl", "get-source-volume", "@DEFAULT_SOURCE@"],
+        capture=True,
+    )
+    match = _VOLUME_RE.search(result.stdout)
+    if match is None:
+        raise RuntimeError(f"could not parse default microphone volume: {result.stdout!r}")
+    return match.group(1)
+
+
+def set_source_volume(value: str) -> None:
+    run(["pactl", "set-source-volume", "@DEFAULT_SOURCE@", value])
+
+
+def restore_session(token: str) -> bool:
+    state = read_state()
+    if state.get("token") != token:
+        return False
+    previous = state.get("previous_volume")
+    if previous is not None:
+        if not isinstance(previous, str) or not previous.isdigit():
+            raise RuntimeError("invalid saved microphone volume in Voxtype adapter state")
+        set_source_volume(previous)
+    clear_state()
+    signal_waybar()
+    return True
+
+
+def spawn_monitor(token: str) -> None:
+    command = Path.home() / ".mybin" / "voxtype-key"
+    subprocess.Popen(
+        [command.as_posix(), "monitor", token],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+        close_fds=True,
+    )
+
+
+def begin(*, mode: str, cleanup: bool, pressed_at: float) -> None:
+    ensure_daemon()
+    current_phase = phase()
+    if current_phase != "idle":
+        raise RuntimeError(f"cannot start dictation while Voxtype is {current_phase}")
+
+    previous_volume = None
+    if CAPTURE_VOLUME != "unchanged":
+        if not re.fullmatch(r"\d+%", CAPTURE_VOLUME):
+            raise RuntimeError(f"invalid profile dictation source volume: {CAPTURE_VOLUME!r}")
+        previous_volume = get_source_volume()
+        set_source_volume(CAPTURE_VOLUME)
+
+    token = uuid.uuid4().hex
+    state = {
+        "token": token,
+        "mode": mode,
+        "pressed_at": pressed_at,
+        "cleanup": cleanup,
+        "previous_volume": previous_volume,
+    }
+    state_written = False
+    try:
+        argv = [VOXTYPE, "record", "start"]
+        if cleanup:
+            argv += ["--profile", "cleanup"]
+        run(argv)
+        write_state(state)
+        state_written = True
+        for _ in range(30):
+            if phase() == "recording":
+                break
+            time.sleep(0.05)
+        else:
+            raise RuntimeError("Voxtype rejected the recording start request")
+    except Exception:
+        if state_written:
+            restore_session(token)
+        elif previous_volume is not None:
+            set_source_volume(previous_volume)
+        raise
+
+    spawn_monitor(token)
+    signal_waybar()
+
+
+def finish(*, cancel: bool) -> None:
+    state = read_state()
+    token = state.get("token")
+    if not isinstance(token, str):
+        if phase() == "idle":
+            return
+        raise RuntimeError("Voxtype is active without myarch adapter state")
+
+    command = "cancel" if cancel else "stop"
+    run([VOXTYPE, "record", command])
+
+    # The CLI sends a signal. Wait until capture has actually closed before
+    # restoring Pocket's previous microphone gain.
+    for _ in range(100):
+        if phase() != "recording":
+            restore_session(token)
+            return
+        time.sleep(0.02)
+    raise RuntimeError("Voxtype did not leave recording state within two seconds")
+
+
+def latch_recording() -> None:
+    state = read_state()
+    if state.get("mode") != "pending":
+        raise RuntimeError("cannot latch a Voxtype recording that is not pending")
+    state["mode"] = "latched"
+    write_state(state)
+    notify("Voxtype recording latched", "Press Super+D again to transcribe.")
+    signal_waybar()
+
+
+def key_down(*, cleanup: bool, edge_time: float) -> None:
+    state = read_state()
+    orphan_release_at = state.get("orphan_release_at")
+    if isinstance(orphan_release_at, (int, float)) and "token" not in state:
+        clear_state()
+        begin(mode="pending", cleanup=cleanup, pressed_at=edge_time)
+        edge_delta = orphan_release_at - edge_time
+        if abs(edge_delta) < HOLD_THRESHOLD_SECONDS:
+            # Process scheduling can start the release-side Python process a few
+            # milliseconds before the press-side process even though Hyprland
+            # emitted the physical edges in the right order.
+            latch_recording()
+        elif edge_delta >= HOLD_THRESHOLD_SECONDS:
+            finish(cancel=False)
+        return
+    if state.get("mode") == "latched":
+        finish(cancel=False)
+        return
+    if state:
+        # A repeated key-down must always provide an escape from a stranded
+        # pending state, matching the old dictation gesture's behavior.
+        finish(cancel=False)
+        return
+    begin(mode="pending", cleanup=cleanup, pressed_at=edge_time)
+
+
+def key_up(*, edge_time: float) -> None:
+    state = read_state()
+    if not state:
+        # Hyprland starts one process per edge. A very short tap can therefore
+        # reach this lock in release/press order even though its timestamps are
+        # correct. Preserve the orphan edge for the matching key-down process.
+        if phase() == "idle":
+            write_state({"orphan_release_at": edge_time})
+        return
+    if state.get("mode") != "pending":
+        return
+    pressed_at = state.get("pressed_at")
+    if not isinstance(pressed_at, (int, float)):
+        raise RuntimeError("pending Voxtype adapter state has no valid press time")
+    held = edge_time - pressed_at
+    if held < HOLD_THRESHOLD_SECONDS:
+        latch_recording()
+        return
+    finish(cancel=False)
+
+
+def set_cleanup(mode: str) -> None:
+    state = read_state()
+    if not state or phase() != "recording":
+        raise RuntimeError("not recording; no Voxtype cleanup profile to change")
+    current = bool(state.get("cleanup"))
+    enabled = not current if mode == "toggle" else mode == "on"
+    profile = "cleanup" if enabled else "raw"
+    # Voxtype records profile selection separately from the start signal and
+    # consumes the latest selection when transcription begins. Sending start
+    # while already recording changes the public profile override without
+    # starting a second capture.
+    run([VOXTYPE, "record", "start", "--profile", profile])
+    state["cleanup"] = enabled
+    write_state(state)
+    notify(
+        f"Voxtype cleanup {'on' if enabled else 'off'}",
+        "Applies when this dictation is transcribed.",
+    )
+    signal_waybar()
+
+
+def waybar_payload(role: str, voxtype_state: dict) -> dict:
+    value = normalize_phase(voxtype_state.get("alt"))
+
+    state = read_state()
+    if role == "status":
+        if value == "idle":
+            return {"text": "", "class": "idle", "alt": "idle"}
+        if value == "recording":
+            suffix = " ✦" if state.get("cleanup") else ""
+            return {"text": f" REC{suffix}", "class": "recording", "alt": "recording"}
+        return {"text": " TRANSCRIBING", "class": "transcribing", "alt": "transcribing"}
+
+    visible = value == "idle" if role == "start" else value == "recording"
+    if not visible:
+        return {"text": "", "class": "hidden", "alt": "hidden"}
+    if role == "start":
+        return {"text": "", "class": "start", "alt": "start"}
+    if role == "cancel":
+        return {"text": "", "class": "cancel", "alt": "cancel"}
+    return {
+        "text": "",
+        "class": ["cleanup", "on" if state.get("cleanup") else "off"],
+        "alt": "cleanup",
+    }
+
+
+def waybar(role: str) -> None:
+    process = subprocess.Popen(
+        [VOXTYPE, "status", "--follow", "--format", "json"],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    assert process.stdout is not None
+    install_child_signal_handlers(process)
+    try:
+        for line in process.stdout:
+            payload = json.loads(line)
+            print(json.dumps(waybar_payload(role, payload)), flush=True)
+    finally:
+        stop_child(process)
+    if process.returncode != 0:
+        raise RuntimeError(f"voxtype status --follow exited {process.returncode}")
+
+
+def monitor(token: str) -> None:
+    process = subprocess.Popen(
+        [VOXTYPE, "status", "--follow", "--format", "json"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+    assert process.stdout is not None
+    install_child_signal_handlers(process)
+    saw_recording = False
+    try:
+        for line in process.stdout:
+            value = normalize_phase(json.loads(line).get("alt"))
+            if value == "recording":
+                saw_recording = True
+            elif saw_recording:
+                with locked():
+                    restore_session(token)
+                return
+    finally:
+        stop_child(process)
+    with locked():
+        restore_session(token)
+
+
+def configure() -> None:
+    config_home = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    config = config_home / "voxtype" / "config.toml"
+    before = config.read_bytes()
+    run([VOXTYPE, "configure"])
+    after = config.read_bytes()
+    if after != before:
+        run(["systemctl", "--user", "restart", "voxtype.service"])
+        notify("Voxtype settings applied", "The daemon was restarted with the new configuration.")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="myarch adapter for Voxtype")
+    commands = parser.add_subparsers(dest="command", required=True)
+
+    key = commands.add_parser("key")
+    key.add_argument("edge", choices=("down", "up"))
+    key.add_argument("--cleanup", action="store_true")
+
+    start = commands.add_parser("start")
+    start.add_argument("--cleanup", action="store_true")
+    commands.add_parser("stop")
+    commands.add_parser("cancel")
+
+    cleanup = commands.add_parser("cleanup")
+    cleanup.add_argument("mode", choices=("on", "off", "toggle"), nargs="?", default="toggle")
+
+    waybar_command = commands.add_parser("waybar")
+    waybar_command.add_argument("--role", choices=("status", "start", "cleanup", "cancel"), default="status")
+    commands.add_parser("settings")
+
+    monitor_command = commands.add_parser("monitor")
+    monitor_command.add_argument("token")
+    return parser
+
+
+def main() -> int:
+    edge_time = time.time()
+    args = build_parser().parse_args()
+    if args.command == "waybar":
+        waybar(args.role)
+        return 0
+    if args.command == "monitor":
+        monitor(args.token)
+        return 0
+    if args.command == "settings":
+        configure()
+        return 0
+
+    with locked():
+        if args.command == "key":
+            if args.edge == "down":
+                key_down(cleanup=args.cleanup, edge_time=edge_time)
+            else:
+                key_up(edge_time=edge_time)
+        elif args.command == "start":
+            begin(mode="latched", cleanup=args.cleanup, pressed_at=edge_time)
+        elif args.command == "stop":
+            finish(cancel=False)
+        elif args.command == "cancel":
+            finish(cancel=True)
+        elif args.command == "cleanup":
+            set_cleanup(args.mode)
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except Exception as exc:
+        notify("Voxtype dictation failed", str(exc), critical=True)
+        print(f"voxtype-key: {exc}", file=sys.stderr)
+        raise SystemExit(1)

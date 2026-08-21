@@ -45,7 +45,7 @@ Wallpaper state is independent. `myarch theme set` rerenders configuration and d
 
 Waybar presents quiet status and critical Pocket controls. Richer operations go through `myarch menu` and Wofi/application/TUI surfaces. `myarch` dispatches commands as argv through Python subprocess APIs; it does not build shell strings from selections.
 
-Sesh, mydictation, NetworkManager, BlueZ, PipeWire, Tailscale, display-mode, Pocket scripts, and gpd-fanctl remain state authorities. myarch only presents and delegates their verbs.
+Sesh, Voxtype, NetworkManager, BlueZ, PipeWire, Tailscale, display-mode, Pocket scripts, and gpd-fanctl remain state authorities. myarch presents their verbs; its small Voxtype adapter translates compositor edges into public recording/profile commands and owns only the established hold/tap gesture plus Pocket microphone-volume transaction.
 
 ## Myrig integration
 

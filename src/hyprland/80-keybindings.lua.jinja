@@ -34,6 +34,13 @@ hl.bind(mainMod .. " + N", hl.dsp.exec_cmd(
     terminal .. " --app-id=net-tui " .. termCells(64, 40) .. " -e nmtui"))
 hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd(
     terminal .. " --app-id=bt-tui " .. termCells(64, 40) .. " -e bluetui"))
+-- The PipeWire default source is independent from the default output, so a
+-- Bluetooth headset can remain the speaker while its broken/poor microphone is
+-- replaced by the laptop microphone. The current source is the initially
+-- highlighted fzf row.
+hl.bind(mainMod .. " + CTRL + I", hl.dsp.exec_cmd(
+    terminal .. " --app-id=audio-input-pick " .. termCells(72, 16) ..
+    " -e {{ home }}/.mybin/audio-input"))
 
 -- Launcher that drops the chosen app into the scratchpad (≙ Super+R, then
 -- Super+ALT+S to stash it, then Super+S to reveal it).
@@ -192,33 +199,25 @@ hl.bind(mainMod .. " + G", function()
     end
 end)
 
--- Dictation (mydictation, ~/dev/*__mydictation). One key, three behaviours:
--- HOLD to talk and it transcribes on release; TAP to latch and it keeps
--- recording until you press again; Super+Escape cancels. The two D binds are
--- the same key's press and release edges — mydictation itself decides which
--- gesture they meant, so the compositor stays dumb.
--- Bind mydictation-key, NOT mydictation: Hyprland spawns binds from the login
--- environment, which has neither ~/.local/bin on PATH nor the ~/.env API keys.
--- The wrapper sources both and execs the real CLI.
-hl.bind(mainMod .. " + D",          hl.dsp.exec_cmd("mydictation-key key down"))
-hl.bind(mainMod .. " + D",          hl.dsp.exec_cmd("mydictation-key key up"), { release = true })
-hl.bind(mainMod .. " + Escape",     hl.dsp.exec_cmd("mydictation-key cancel"))
--- Promote the dictation ALREADY IN PROGRESS to the cleanup pass. The decision
--- is not read until the audio is transcribed, so this works right up until you
--- stop talking — which is when you usually realise it was a ramble.
-hl.bind(mainMod .. " + ALT + D",    hl.dsp.exec_cmd("mydictation-key cleanup toggle"))
--- Same gesture, but runs the LLM cleanup pass on this dictation.
-hl.bind(mainMod .. " + SHIFT + D",  hl.dsp.exec_cmd("mydictation-key key down --cleanup"))
-hl.bind(mainMod .. " + SHIFT + D",  hl.dsp.exec_cmd("mydictation-key key up"), { release = true })
--- Settings TUI (backend, local model, capture, injection…). Same shape as the
--- wallpaper picker on Super+Shift+B: curses needs a TTY, which a bare exec has
--- none of, so it goes in a terminal with a dedicated app-id that the float rule
--- below matches. `-e` is xterm-compatibility on foot and the real thing on
--- kitty, so one spelling covers both machines.
--- 40 rows because that is the full settings list without scrolling.
+-- Dictation (Voxtype through myarch's compositor adapter). One key retains the
+-- established three behaviours: HOLD to talk and transcribe on release; TAP to
+-- latch until the next press; Super+Escape cancels. Voxtype remains responsible
+-- for capture, transcription, profiles and output; voxtype-key only translates
+-- compositor edges and preserves the Pocket microphone-volume transaction.
+hl.bind(mainMod .. " + D",          hl.dsp.exec_cmd("{{ home }}/.mybin/voxtype-key key down"))
+hl.bind(mainMod .. " + D",          hl.dsp.exec_cmd("{{ home }}/.mybin/voxtype-key key up"), { release = true })
+hl.bind(mainMod .. " + Escape",     hl.dsp.exec_cmd("{{ home }}/.mybin/voxtype-key cancel"))
+-- Switch the dictation already in progress between Voxtype's cleanup and raw
+-- profiles. The latest profile selection is consumed when transcription starts.
+hl.bind(mainMod .. " + ALT + D",    hl.dsp.exec_cmd("{{ home }}/.mybin/voxtype-key cleanup toggle"))
+-- Same hold/tap gesture, with the Anthropic cleanup profile selected at start.
+hl.bind(mainMod .. " + SHIFT + D",  hl.dsp.exec_cmd("{{ home }}/.mybin/voxtype-key key down --cleanup"))
+hl.bind(mainMod .. " + SHIFT + D",  hl.dsp.exec_cmd("{{ home }}/.mybin/voxtype-key key up"), { release = true })
+-- Voxtype's configuration TUI. It needs a terminal and receives a dedicated
+-- app-id so the transient settings surface floats instead of reflowing the grid.
 hl.bind(mainMod .. " + CTRL + D",   hl.dsp.exec_cmd(
-    terminal .. " --app-id=mydictation-settings " .. termCells(64, 40) ..
-    " -e mydictation-key settings"))
+    terminal .. " --app-id=voxtype-settings " .. termCells(76, 42) ..
+    " -e {{ home }}/.mybin/voxtype-key settings"))
 
 -- Special workspace (scratchpad)
 hl.bind(mainMod .. " + S",         hl.dsp.workspace.toggle_special("magic"))

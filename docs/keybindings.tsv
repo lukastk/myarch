@@ -8,6 +8,7 @@ Super+C	Close window
 Super+M	End Hyprland session
 Super+N	Network panel
 Super+Shift+N	Bluetooth panel
+Super+Ctrl+I	Choose the PipeWire recording input
 Super+Arrow	Focus window
 Super+Shift+Arrow	Move window
 Super+[ / Super+]	Focus previous / next monitor
@@ -28,9 +29,9 @@ Super+G	Live workspace overview
 Super+S	Toggle scratchpad
 Super+Alt+S	Move window to scratchpad
 Super+D	Hold to dictate; tap to latch
-Super+Shift+D	Dictate with cleanup
+Super+Shift+D	Dictate with Voxtype cleanup profile
 Super+Alt+D	Toggle cleanup for recording in progress
-Super+Ctrl+D	Dictation settings
+Super+Ctrl+D	Voxtype settings
 Super+Escape	Cancel dictation
 Super+V	Clipboard history
 Print	Screenshot focused monitor

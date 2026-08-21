@@ -91,18 +91,14 @@
     "exclusive": true,
     "passthrough": false,
     "gtk-layer-shell": true,
-    /* ROW 2 — what you PRESS. Dictation lives here rather than beside the
-       workspaces (where the one-row layout puts it) for two reasons: row 1 has
-       no room for it, and it is the module whose width MOVES — idle it is one
-       ~126px button, recording it is three totalling ~292px. On row 1 that
-       shifted the whole workspace strip sideways mid-tap; here it grows into
-       empty space and nothing else moves. */
+    /* ROW 2 — what you PRESS. Voxtype's controls grow into this row's empty
+       space while recording, so the workspace strip never shifts under a tap. */
     "modules-left": [
       "group/apps",
-      "custom/mydictation-start",
-      "custom/mydictation",
-      "custom/mydictation-cleanup",
-      "custom/mydictation-cancel",
+      "custom/voxtype-start",
+      "custom/voxtype",
+      "custom/voxtype-cleanup",
+      "custom/voxtype-cancel",
       "custom/recording"
     ],
     "modules-center": [],

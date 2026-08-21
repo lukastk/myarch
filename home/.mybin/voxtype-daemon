@@ -1,0 +1,13 @@
+#!/bin/sh
+# Start Voxtype with the same private environment interactive shells receive.
+# The normal Parakeet path needs no API key; the optional cleanup profile reads
+# MY_ANTHROPIC_API_KEY when Voxtype invokes voxtype-cleanup.
+set -eu
+
+if [ -f "$HOME/.env" ]; then
+    set -a
+    . "$HOME/.env"
+    set +a
+fi
+
+exec /usr/bin/voxtype -q daemon
