@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install test dependencies
         run: pacman -Syu --noconfirm python python-jinja shellcheck git
-      - name: Validate profiles, templates, scripts, and source secrets
+      - name: Validate profiles, templates, and scripts
         run: ./scripts/test
 
   gitleaks:

@@ -27,7 +27,6 @@ Run before every commit:
 
 ```bash
 ./scripts/test
-./scripts/check-secrets.py
 git diff --check
 ```
 

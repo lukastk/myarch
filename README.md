@@ -104,10 +104,9 @@ Static home files are symlinked to the clone. Templates are rendered atomically 
 
 ```bash
 ./scripts/test
-./scripts/check-secrets.py
 ```
 
-The test suite renders every template for both profiles and all themes, parses Waybar JSONC, checks the theme/profile contracts and binding catalogue, compiles Python, runs ShellCheck, and scans source files for credential material.
+The test suite renders every template for both profiles and all themes, parses Waybar JSONC, checks the theme/profile contracts and binding catalogue, compiles Python, and runs ShellCheck.
 
 Pocket validation additionally covers all four orientation/scale states, Hyprland config errors, plugin state, display/touch coupling, OSK and gesture behavior, dictation, Sesh/SST, capture, idle/lock, fonts, and bar resource use. See [`docs/pocket4.md`](docs/pocket4.md) and [`docs/feature-parity.md`](docs/feature-parity.md).
 
