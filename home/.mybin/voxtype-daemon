@@ -1,13 +1,28 @@
 #!/bin/sh
-# Start Voxtype with the same private environment interactive shells receive.
+# Start Voxtype with the private environment its post-processing needs.
 # The normal Parakeet path needs no API key; the optional cleanup profile reads
 # MY_ANTHROPIC_API_KEY when Voxtype invokes voxtype-cleanup.
 set -eu
 
+# Ambient, non-secret env (paths etc.) plus any env-tagged secrets.
 if [ -f "$HOME/.env" ]; then
     set -a
     . "$HOME/.env"
     set +a
+fi
+
+# MY_ANTHROPIC_API_KEY is deliberately NOT env-tagged (kept out of the ambient
+# ~/.env), so fetch it on demand from the 1Password `mysetup` vault via `secret
+# get` — the same pattern the anki-api / mysrs supervisor wrappers use. Only the
+# optional Anthropic cleanup profile needs it, so a failed/absent fetch is
+# NON-FATAL: raw transcription still works, and voxtype-cleanup fails loudly on
+# its own if the key is missing when a cleanup is actually requested. `secret`
+# needs op + jq on PATH.
+export PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+if [ -x "$HOME/.mybin/secret" ]; then
+    _anthropic="$("$HOME/.mybin/secret" get MY_ANTHROPIC_API_KEY 2>/dev/null || true)"
+    [ -n "$_anthropic" ] && export MY_ANTHROPIC_API_KEY="$_anthropic"
+    unset _anthropic
 fi
 
 exec /usr/bin/voxtype -q daemon
