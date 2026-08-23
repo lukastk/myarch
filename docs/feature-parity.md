@@ -4,7 +4,7 @@ A myarch change is incomplete if it regresses any item below.
 
 | Area | Invariant |
 |---|---|
-| Sesh/SST | `sst`, cockpit, tickets, tmux keyboard/mouse/clipboard, cross-machine sessions |
+| Sesh/SST | `sst`, mycockpit, tickets, tmux keyboard/mouse/clipboard, cross-machine sessions |
 | Workspaces | 1–15 banks, role mapping, persistent slots, chooser, app pins, scratchpad, `hypr-load-main` |
 | Overview | Super+G and three-finger-up open Hyprexpo with real workspace IDs |
 | IdeaPad gestures | Native three-finger horizontal workspace movement and up overview |
