@@ -28,7 +28,16 @@ volume = 0.7
 [parakeet]
 model = "parakeet-tdt-0.6b-v3-int8"
 model_type = "tdt"
-on_demand_loading = false
+# Load the model when recording starts and unload it at idle, rather than
+# keeping it resident from daemon start. Voxtype's own framing of the trade-off
+# is "resident-mode transcription starts instantly; on-demand loads add a
+# one-shot delay on the first key press" — and a one-shot delay is the right
+# side of that bargain on both machines this renders for. Measured on ideapad
+# 2026-08-27, resident: 101MB anon + 887MB swapped, i.e. ~1GB held permanently
+# for a feature that can only be used by someone sitting at the keyboard. That
+# machine is a server almost all of the time, and pocket4 is an 8.8" portable
+# where the RAM and the battery both matter more than the first keypress.
+on_demand_loading = true
 
 [output]
 mode = "type"
