@@ -1,0 +1,8 @@
+# Installed by myarch. brightnessctl needs write access to the actual sysfs
+# attributes; Arch's package does not install upstream's group-write udev rules.
+# This is a single-user desktop, so grant the user who installed myarch direct
+# ownership rather than depending on a newly-added supplementary group that only
+# becomes active after the next login.
+ACTION=="add", SUBSYSTEM=="backlight", RUN+="/usr/bin/chown @USER@ /sys/class/backlight/%k/brightness"
+ACTION=="add", SUBSYSTEM=="leds", KERNEL=="*:kbd_backlight", RUN+="/usr/bin/chown @USER@ /sys/class/leds/%k/brightness"
+ACTION=="add", SUBSYSTEM=="leds", KERNEL=="*:kbd_zoned_backlight-*", RUN+="/usr/bin/chown @USER@ /sys/class/leds/%k/brightness"

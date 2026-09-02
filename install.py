@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import pwd
 import re
 import shutil
 import stat
@@ -260,7 +261,38 @@ def render_home(profile_name: str, profile: dict, theme_name: str, theme: dict) 
     return installed
 
 
+def configure_brightness_access() -> None:
+    username = pwd.getpwuid(os.getuid()).pw_name
+    if not re.fullmatch(r"[a-z_][a-z0-9_-]*[$]?", username):
+        raise RuntimeError(f"cannot render udev brightness rules for invalid username: {username!r}")
+    source = REPO / "system/udev/90-myarch-brightness.rules.in"
+    template = source.read_text()
+    if template.count("@USER@") != 3:
+        raise RuntimeError(f"{source} must contain exactly three @USER@ placeholders")
+    rendered = template.replace("@USER@", username)
+    with tempfile.NamedTemporaryFile("w", prefix="myarch-brightness-", suffix=".rules", delete=False) as stream:
+        stream.write(rendered)
+        temporary = Path(stream.name)
+    try:
+        run(["sudo", "install", "-Dm644", temporary.as_posix(), "/etc/udev/rules.d/90-myarch-brightness.rules"])
+    finally:
+        temporary.unlink(missing_ok=True)
+    run(["sudo", "udevadm", "control", "--reload-rules"])
+
+    attributes = sorted((Path("/sys/class/backlight")).glob("*/brightness"))
+    led_root = Path("/sys/class/leds")
+    if led_root.is_dir():
+        attributes.extend(
+            path / "brightness"
+            for path in sorted(led_root.iterdir(), key=lambda item: item.name)
+            if path.name.endswith(":kbd_backlight") or ":kbd_zoned_backlight-" in path.name
+        )
+    for attribute in attributes:
+        run(["sudo", "chown", username, attribute.as_posix()])
+
+
 def configure_system() -> None:
+    configure_brightness_access()
     source = REPO / "system/keyd/default.conf"
     probe = run(["sudo", "cmp", "-s", source.as_posix(), "/etc/keyd/default.conf"], check=False)
     keyd_changed = probe.returncode != 0

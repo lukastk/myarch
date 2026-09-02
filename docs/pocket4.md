@@ -21,6 +21,7 @@ The GPD Pocket 4 panel is physically portrait (`1600×2560`) and mounted sideway
 - `pocket4-tablet-mode` — explicit 1.6/2.0 state; there is no reliable physical tablet-mode sensor.
 - `pocket4-osk` — spawn-to-show / kill-to-hide `wvkbd-deskintl`; running equals visible.
 - `pocket4-thermal-mode` — delegates to `pocket4-mode`; quiet/chill/balanced/performance set both CPU envelope and fan curve. `pocket4-thermal-mode pick` opens the fzf selector (also bound to `Super+Ctrl+P`), while the Waybar button keeps cycling modes.
+- `keyboard-backlight` — discovers and controls standard Linux `*:kbd_backlight` LED devices on machines that expose one. The Pocket 4 does not: its HAILUCK keyboard MCU owns the light, does not publish its state to Linux, and consumes `Fn+Space` inside the firmware. On GPD's 2025-01-16 keyboard firmware, that physical chord cycles 30-second automatic → always on → off. `keyboard-backlight get` therefore reports the hardware truth instead of fabricating a state, and `pick` shows the physical instruction.
 - `pocket4-ws` / watcher — Lua-compatible workspace dispatch and event-driven bar refresh.
 - Hyprgrass — touchscreen gestures inside the compositor; no direct evdev ACL/daemon.
 

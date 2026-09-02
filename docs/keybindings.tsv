@@ -44,4 +44,6 @@ Super+Ctrl+B	Restart bar
 Super+O	Cycle monitor layout
 Super+Shift+O	Toggle mirroring
 Super+Shift+P	Pause / black screen for a duration
-XF86 volume / brightness / media	Hardware controls
+Fn+Space	Cycle Pocket 4 keyboard light: 30-second automatic / always on / off (firmware)
+XF86 keyboard-light keys	Raise / lower / cycle a standard Linux keyboard backlight
+XF86 volume / screen brightness / media	Hardware controls

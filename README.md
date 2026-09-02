@@ -26,6 +26,7 @@ myarch began as an extraction of the Hyprland target from [`myrig`](https://gith
 - Pocket display rotation coupled to touchscreen transform, explicit tablet scaling, OSK, gaps, and thermal controls
 - Voxtype-powered local Parakeet dictation with preserved hold/latch/cleanup shortcuts and touch controls
 - Display layouts, sub-backlight gamma dimming, wallpaper rotation/pinning, idle inhibition, lock/idle policy, and graphical-session environment repair
+- Keyboard-backlight discovery, level control for standard Linux LED-class devices, and truthful Pocket firmware guidance
 - Unified `myarch menu`, keybinding catalogue, themes, PipeWire input picker, and audio/network/Bluetooth/display/power/Tailscale control surfaces
 - Screenshot, OCR, QR, colour, and GPU screen-recording workflows
 - Arthur, Tokyo Night, and Matte Black semantic themes across the bar, borders, terminals, notifications, and lock screen
@@ -72,6 +73,12 @@ myarch theme set tokyo-night
 myarch theme pick
 
 myarch panel audio|network|bluetooth|display|power|tailscale
+
+# Discover/control a standard Linux keyboard light; Pocket 4 reports its Fn+Space firmware control
+keyboard-backlight devices
+keyboard-backlight get
+keyboard-backlight set off|on|LEVEL|PERCENT
+keyboard-backlight up|down|cycle|pick
 
 # Pocket 4 only: choose quiet/chill/balanced/performance with fzf
 pocket4-thermal-mode pick

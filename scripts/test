@@ -5,7 +5,7 @@ repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 pycache=$(mktemp -d)
 trap 'rm -rf -- "$pycache"' EXIT
 export PYTHONPYCACHEPREFIX="$pycache"
-python3 -m py_compile "$repo/install.py" "$repo/home/.mybin/myarch" "$repo/tests/test_render.py"
+python3 -m py_compile "$repo/install.py" "$repo/home/.mybin/myarch" "$repo/home/.mybin/keyboard-backlight" "$repo/tests/test_render.py"
 python3 -m unittest discover -s "$repo/tests" -v
 
 mapfile -d '' shell_files < <(find "$repo/home/.mybin" "$repo/home/.config/myarch/shell" -type f -print0)

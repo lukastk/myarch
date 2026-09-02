@@ -61,6 +61,7 @@ def command_menu() -> None:
         "󰸉 Wallpapers": lambda: detach(terminal_argv([str(HOME / ".mybin/wallpaper"), "pick"], "Wallpapers")),
         "󰹑 Capture": capture_menu,
         "󰍹 Displays": lambda: panel("display"),
+        "󰥻 Keyboard backlight": lambda: run([str(HOME / ".mybin/keyboard-backlight"), "pick"]),
         "󰕾 Audio": lambda: panel("audio"),
         "󰤨 Network": lambda: panel("network"),
         "󰂯 Bluetooth": lambda: panel("bluetooth"),

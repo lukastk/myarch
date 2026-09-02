@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import re
+import runpy
+import tempfile
 import tomllib
 import unittest
 
@@ -157,6 +159,44 @@ class RenderTests(unittest.TestCase):
         self.assertIn("source['name'] == current", picker)
         self.assertNotIn("shell=True", picker)
         compile(picker, picker_path.as_posix(), "exec")
+
+    def test_keyboard_backlight_uses_led_class_and_preserves_pocket_firmware_truth(self) -> None:
+        helper_path = ROOT / "home/.mybin/keyboard-backlight"
+        helper = helper_path.read_text()
+        self.assertTrue(helper_path.stat().st_mode & 0o100)
+        self.assertNotIn("shell=True", helper)
+        self.assertIn('POCKET4_KEYBOARD = ("258a", "000c")', helper)
+        self.assertIn('name.endswith(":kbd_backlight")', helper)
+        self.assertIn('["brightnessctl", "--class", "leds", "--device", device.name', helper)
+
+        namespace = runpy.run_path(helper_path)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            led = root / "platform::kbd_backlight"
+            led.mkdir()
+            (led / "brightness").write_text("1\n")
+            (led / "max_brightness").write_text("2\n")
+            devices = namespace["discover"](root)
+        self.assertEqual(1, len(devices))
+        self.assertEqual("platform::kbd_backlight", devices[0].name)
+        self.assertEqual("low", namespace["level_name"](1, 2))
+        self.assertEqual(2, namespace["parse_level"]("100%", 2))
+        with self.assertRaises(ValueError):
+            namespace["parse_level"]("3", 2)
+
+        bindings = (ROOT / "src/hyprland/80-keybindings.lua.jinja").read_text()
+        self.assertIn('hl.bind("XF86KbdBrightnessUp"', bindings)
+        self.assertIn('hl.bind("XF86KbdLightOnOff"', bindings)
+        router = (ROOT / "home/.mybin/myarch").read_text()
+        self.assertIn('HOME / ".mybin/keyboard-backlight"', router)
+
+        rules = (ROOT / "system/udev/90-myarch-brightness.rules.in").read_text()
+        self.assertEqual(3, rules.count("@USER@"))
+        self.assertIn('KERNEL=="*:kbd_backlight"', rules)
+        installer = (ROOT / "install.py").read_text()
+        self.assertIn('configure_brightness_access()', installer)
+        self.assertIn('["sudo", "chown", username, attribute.as_posix()]', installer)
+
 
     def test_pocket_thermal_picker_uses_fzf_and_is_profile_scoped(self) -> None:
         picker_path = ROOT / "home/.mybin/pocket4-thermal-mode"

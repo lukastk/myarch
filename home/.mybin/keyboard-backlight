@@ -1,0 +1,277 @@
+#!/usr/bin/env python3
+"""Discover and control standard Linux keyboard-backlight LED devices.
+
+The GPD Pocket 4 is the important exception: its keyboard MCU owns the light,
+Fn+Space never reaches Linux, and the firmware exposes no keyboard-backlight LED
+class device.  On that hardware this command reports the real physical control
+instead of inventing an unreadable software state.
+"""
+
+from __future__ import annotations
+
+import argparse
+from dataclasses import dataclass
+from pathlib import Path
+import shutil
+import subprocess
+
+LED_ROOT = Path("/sys/class/leds")
+DMI_PRODUCT = Path("/sys/class/dmi/id/product_name")
+USB_ROOT = Path("/sys/bus/usb/devices")
+POCKET4_PRODUCT = "G1628-04"
+POCKET4_KEYBOARD = ("258a", "000c")
+
+
+@dataclass(frozen=True)
+class LedDevice:
+    name: str
+    path: Path
+    brightness: int
+    maximum: int
+
+
+def read_integer(path: Path) -> int:
+    try:
+        value = int(path.read_text().strip())
+    except (OSError, ValueError) as error:
+        raise RuntimeError(f"cannot read integer from {path}: {error}") from error
+    return value
+
+
+def discover(root: Path = LED_ROOT) -> list[LedDevice]:
+    if not root.is_dir():
+        return []
+    devices: list[LedDevice] = []
+    for path in sorted(root.iterdir(), key=lambda item: item.name):
+        name = path.name
+        if not (name.endswith(":kbd_backlight") or ":kbd_zoned_backlight-" in name):
+            continue
+        maximum = read_integer(path / "max_brightness")
+        brightness = read_integer(path / "brightness")
+        if maximum <= 0:
+            raise RuntimeError(f"{path}/max_brightness must be positive, got {maximum}")
+        if not 0 <= brightness <= maximum:
+            raise RuntimeError(f"{path}/brightness is outside 0..{maximum}: {brightness}")
+        devices.append(LedDevice(name, path, brightness, maximum))
+    return devices
+
+
+def is_pocket4() -> bool:
+    try:
+        product = DMI_PRODUCT.read_text().strip()
+    except OSError:
+        return False
+    if product != POCKET4_PRODUCT or not USB_ROOT.is_dir():
+        return False
+    for device in USB_ROOT.iterdir():
+        try:
+            vendor = (device / "idVendor").read_text().strip().lower()
+            product_id = (device / "idProduct").read_text().strip().lower()
+        except OSError:
+            continue
+        if (vendor, product_id) == POCKET4_KEYBOARD:
+            return True
+    return False
+
+
+def level_name(value: int, maximum: int) -> str:
+    if value == 0:
+        return "off"
+    if value == maximum:
+        return "on" if maximum == 1 else "high"
+    if maximum == 2 and value == 1:
+        return "low"
+    if maximum == 3:
+        return {1: "low", 2: "medium"}[value]
+    return f"level {value}"
+
+
+def parse_level(raw: str, maximum: int) -> int:
+    aliases = {"off": 0, "on": maximum, "high": maximum}
+    lowered = raw.lower()
+    if lowered in aliases:
+        return aliases[lowered]
+    if lowered == "low":
+        return 1
+    if lowered == "medium":
+        return max(1, round(maximum / 2))
+    if raw.endswith("%"):
+        try:
+            percent = int(raw[:-1])
+        except ValueError as error:
+            raise ValueError(f"invalid percentage: {raw}") from error
+        if not 0 <= percent <= 100:
+            raise ValueError(f"percentage must be in 0..100: {raw}")
+        return round(maximum * percent / 100)
+    try:
+        value = int(raw)
+    except ValueError as error:
+        raise ValueError(f"level must be off, on, low, medium, an integer, or a percentage: {raw}") from error
+    if not 0 <= value <= maximum:
+        raise ValueError(f"level must be in 0..{maximum}: {value}")
+    return value
+
+
+def describe(device: LedDevice) -> str:
+    percent = round(device.brightness * 100 / device.maximum)
+    return (
+        f"{device.name}: {device.brightness}/{device.maximum} "
+        f"({percent}%, {level_name(device.brightness, device.maximum)})"
+    )
+
+
+def pocket4_message() -> str:
+    return (
+        "GPD Pocket 4 keyboard backlight: firmware-controlled; current state is not visible to Linux.\n"
+        "Press Fn+Space to cycle: 30-second automatic → always on → off.\n"
+        "The three-mode control requires GPD's keyboard firmware update dated 2025-01-16."
+    )
+
+
+def choose(prompt: str, rows: list[tuple[str, str]]) -> str | None:
+    if shutil.which("wofi") is None:
+        raise RuntimeError("wofi is required for the keyboard-backlight picker")
+    result = subprocess.run(
+        ["wofi", "--dmenu", "--prompt", prompt, "--insensitive", "--cache-file", "/dev/null"],
+        input="\n".join(f"{label}\t{value}" for label, value in rows) + "\n",
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        return None
+    answer = result.stdout.rstrip("\n")
+    if not answer:
+        return None
+    try:
+        return answer.rsplit("\t", 1)[1]
+    except IndexError as error:
+        raise RuntimeError(f"wofi returned a malformed selection: {answer!r}") from error
+
+
+def notify(title: str, body: str) -> None:
+    if shutil.which("notify-send") is not None:
+        subprocess.run(["notify-send", title, body], check=False)
+
+
+def resolve_device(devices: list[LedDevice], requested: str | None) -> LedDevice:
+    if requested is not None:
+        matches = [device for device in devices if device.name == requested]
+        if not matches:
+            available = ", ".join(device.name for device in devices) or "none"
+            raise RuntimeError(f"keyboard-backlight device {requested!r} not found; available: {available}")
+        return matches[0]
+    if len(devices) == 1:
+        return devices[0]
+    if not devices:
+        raise RuntimeError("no standard Linux keyboard-backlight LED device was found")
+    names = ", ".join(device.name for device in devices)
+    raise RuntimeError(f"multiple keyboard-backlight devices found; pass --device with one of: {names}")
+
+
+def set_level(device: LedDevice, value: int) -> None:
+    if shutil.which("brightnessctl") is None:
+        raise RuntimeError("brightnessctl is required to set keyboard backlighting")
+    subprocess.run(
+        ["brightnessctl", "--class", "leds", "--device", device.name, "--quiet", "set", str(value)],
+        check=True,
+    )
+
+
+def pick(devices: list[LedDevice], requested: str | None = None) -> None:
+    if not devices:
+        if is_pocket4():
+            message = pocket4_message()
+            print(message)
+            notify("Keyboard backlight", message)
+            return
+        raise RuntimeError("no standard Linux keyboard-backlight LED device was found")
+
+    if requested is not None:
+        device = resolve_device(devices, requested)
+    elif len(devices) == 1:
+        device = devices[0]
+    else:
+        selected = choose(
+            "Keyboard backlight device",
+            [(describe(device), device.name) for device in devices],
+        )
+        if selected is None:
+            return
+        device = resolve_device(devices, selected)
+
+    rows = []
+    for value in range(device.maximum + 1):
+        marker = "●" if value == device.brightness else " "
+        label = f"{marker} {level_name(value, device.maximum)} — {value}/{device.maximum}"
+        rows.append((label, str(value)))
+    selected = choose("Keyboard backlight", rows)
+    if selected is not None:
+        set_level(device, int(selected))
+
+
+def parser() -> argparse.ArgumentParser:
+    result = argparse.ArgumentParser(prog="keyboard-backlight")
+    result.add_argument("--device", help="exact sysfs LED device name when more than one is present")
+    subcommands = result.add_subparsers(dest="command", required=True)
+    subcommands.add_parser("devices", help="list detected keyboard-backlight controllers")
+    subcommands.add_parser("get", help="show the current level")
+    subcommands.add_parser("up", help="raise by one hardware level")
+    subcommands.add_parser("down", help="lower by one hardware level")
+    subcommands.add_parser("cycle", help="cycle through every hardware level")
+    subcommands.add_parser("pick", help="choose a level graphically")
+    set_parser = subcommands.add_parser("set", help="set off/on, a raw level, or a percentage")
+    set_parser.add_argument("level")
+    return result
+
+
+def execute(args: argparse.Namespace) -> None:
+    devices = discover()
+
+    if args.command == "devices":
+        if devices:
+            print("\n".join(describe(device) for device in devices))
+        elif is_pocket4():
+            print(pocket4_message())
+        else:
+            raise RuntimeError("no controller found")
+        return
+
+    if args.command == "pick":
+        pick(devices, args.device)
+        return
+
+    if not devices and is_pocket4():
+        if args.command == "get":
+            print(pocket4_message())
+            return
+        raise RuntimeError(
+            "the Pocket 4 light cannot be set by the OS; "
+            "press Fn+Space to cycle automatic, always-on, and off"
+        )
+
+    device = resolve_device(devices, args.device)
+    if args.command == "get":
+        print(describe(device))
+        return
+    if args.command == "set":
+        value = parse_level(args.level, device.maximum)
+    elif args.command == "up":
+        value = min(device.maximum, device.brightness + 1)
+    elif args.command == "down":
+        value = max(0, device.brightness - 1)
+    elif args.command == "cycle":
+        value = (device.brightness + 1) % (device.maximum + 1)
+    else:
+        raise RuntimeError(f"unhandled command: {args.command}")
+    set_level(device, value)
+
+
+def main() -> None:
+    try:
+        execute(parser().parse_args())
+    except (RuntimeError, ValueError, subprocess.CalledProcessError) as error:
+        raise SystemExit(f"keyboard-backlight: {error}") from error
+
+
+if __name__ == "__main__":
+    main()

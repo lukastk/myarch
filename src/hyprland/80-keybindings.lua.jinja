@@ -332,7 +332,7 @@ hl.bind(mainMod .. " + SHIFT + P", hl.dsp.exec_cmd(
     terminal .. " --app-id=pause-prompt " .. termCells(56, 10) ..
     " -e {{ home }}/.mybin/pause-prompt"))
 
--- Laptop multimedia keys for volume and LCD brightness
+-- Laptop multimedia keys for volume, LCD brightness, and keyboard lighting.
 hl.bind("XF86AudioRaiseVolume",  hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), { locked = true, repeating = true })
 hl.bind("XF86AudioLowerVolume",  hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),      { locked = true, repeating = true })
 hl.bind("XF86AudioMute",         hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),     { locked = true, repeating = true })
@@ -346,6 +346,15 @@ hl.bind("XF86AudioMicMute",      hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_
 -- environment, which has no ~/.mybin on PATH (same as the dictation binds).
 hl.bind("XF86MonBrightnessUp",   hl.dsp.exec_cmd("{{ home }}/.mybin/brightness up"),   { locked = true, repeating = true })
 hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("{{ home }}/.mybin/brightness down"), { locked = true, repeating = true })
+
+-- Standard keyboard-light events delegate to the generic LED-class authority.
+-- The Pocket 4's Fn+Space never emits one: its keyboard MCU owns three modes and
+-- is intentionally left to that physical shortcut rather than given a fake OS
+-- state. On hardware such as the IdeaPad, the helper discovers and updates the
+-- kernel's *:kbd_backlight device through brightnessctl.
+hl.bind("XF86KbdBrightnessUp",   hl.dsp.exec_cmd("{{ home }}/.mybin/keyboard-backlight up"),    { locked = true, repeating = true })
+hl.bind("XF86KbdBrightnessDown", hl.dsp.exec_cmd("{{ home }}/.mybin/keyboard-backlight down"),  { locked = true, repeating = true })
+hl.bind("XF86KbdLightOnOff",     hl.dsp.exec_cmd("{{ home }}/.mybin/keyboard-backlight cycle"), { locked = true })
 
 -- Requires playerctl
 hl.bind("XF86AudioNext",  hl.dsp.exec_cmd("playerctl next"),       { locked = true })
