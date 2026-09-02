@@ -158,6 +158,28 @@ class RenderTests(unittest.TestCase):
         self.assertNotIn("shell=True", picker)
         compile(picker, picker_path.as_posix(), "exec")
 
+    def test_pocket_thermal_picker_uses_fzf_and_is_profile_scoped(self) -> None:
+        picker_path = ROOT / "home/.mybin/pocket4-thermal-mode"
+        picker = picker_path.read_text()
+        self.assertTrue(picker_path.stat().st_mode & 0o100)
+        self.assertIn("pick) pick", picker)
+        self.assertIn("--prompt='power> '", picker)
+        self.assertIn("--with-nth=1", picker)
+        self.assertIn('is_mode "$selected"', picker)
+        self.assertIn('[ "$selected" = "$current" ] || set_mode "$selected"', picker)
+
+        binding_template = (ROOT / "src/hyprland/80-keybindings.lua.jinja").read_text()
+        rules_template = (ROOT / "src/hyprland/90-window-rules.lua.jinja").read_text()
+        pocket_binding = self.env.from_string(binding_template).render(**self.context("pocket4"))
+        ideapad_binding = self.env.from_string(binding_template).render(**self.context("ideapad"))
+        pocket_rules = self.env.from_string(rules_template).render(**self.context("pocket4"))
+        ideapad_rules = self.env.from_string(rules_template).render(**self.context("ideapad"))
+        self.assertIn('mainMod .. " + CTRL + P"', pocket_binding)
+        self.assertIn("pocket4-thermal-mode pick", pocket_binding)
+        self.assertNotIn('mainMod .. " + CTRL + P"', ideapad_binding)
+        self.assertIn("^thermal-mode-pick$", pocket_rules)
+        self.assertNotIn("^thermal-mode-pick$", ideapad_rules)
+
     def test_monospace_surfaces_use_ioskeley(self) -> None:
         family = "IoskeleyMonoTerm Nerd Font Mono"
         surfaces = [

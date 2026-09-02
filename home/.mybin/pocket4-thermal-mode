@@ -18,7 +18,7 @@
 #
 # `set` needs root, so this uses sudo — pocket4 has NOPASSWD sudo (setup/prelim/arch.py).
 #
-# Usage: pocket4-thermal-mode {cycle|next|prev|set <mode>|get|status}
+# Usage: pocket4-thermal-mode {cycle|next|prev|pick|set <mode>|get|status}
 set -euo pipefail
 
 MODES=(quiet chill balanced performance)
@@ -26,6 +26,14 @@ MODES=(quiet chill balanced performance)
 WAYBAR_SIGNAL=9
 
 get() { pocket4-mode; }
+
+is_mode() {
+    local want=$1 mode
+    for mode in "${MODES[@]}"; do
+        [ "$mode" = "$want" ] && return 0
+    done
+    return 1
+}
 
 # Poke waybar so the button updates immediately instead of waiting for a poll.
 # The module is signal-driven ("interval": "once") precisely so it costs nothing when
@@ -68,6 +76,68 @@ step() {
     [ "${MODES[$next]}" = "$cur" ] || set_mode "${MODES[$next]}"
 }
 
+mode_row() {
+    local mode=$1 current=$2 marker=" " desc
+    [ "$mode" = "$current" ] && marker="●"
+    case "$mode" in
+        quiet)       desc="silent · warmer case · slower single-threaded" ;;
+        chill)       desc="coolest case · same speed cost as quiet" ;;
+        balanced)    desc="inaudible for normal work" ;;
+        performance) desc="full speed · audible under load" ;;
+        *) echo "pocket4-thermal-mode: cannot describe unknown mode: $mode" >&2; return 1 ;;
+    esac
+    printf '%s %s — %s\t%s\n' "$marker" "$mode" "$desc" "$mode"
+}
+
+pick() {
+    command -v fzf >/dev/null || {
+        echo "pocket4-thermal-mode: fzf is not installed" >&2
+        return 1
+    }
+
+    local current mode choice selected rc=0
+    current=$(get)
+    is_mode "$current" || {
+        echo "pocket4-thermal-mode: unknown current mode: $current" >&2
+        return 1
+    }
+
+    # Match the audio-input picker: put the current value first so fzf opens on
+    # it, preserve our intentional order, and hide the machine-readable value
+    # after the tab. The value is passed back as data, never interpolated into a
+    # shell command; set_mode delegates to pocket4-mode through separate argv.
+    choice=$(
+        {
+            mode_row "$current" "$current"
+            for mode in "${MODES[@]}"; do
+                [ "$mode" = "$current" ] || mode_row "$mode" "$current"
+            done
+        } | fzf \
+            --prompt='power> ' \
+            --header='Select the Pocket thermal / power mode' \
+            --reverse \
+            --no-multi \
+            --no-sort \
+            --delimiter=$'\t' \
+            --with-nth=1
+    ) || rc=$?
+
+    # Esc/Ctrl-C and an empty query result are ordinary cancellation. Anything
+    # else indicates a broken picker and stays loud.
+    if [ "$rc" -eq 1 ] || [ "$rc" -eq 130 ]; then return 0; fi
+    if [ "$rc" -ne 0 ]; then
+        echo "pocket4-thermal-mode: fzf exited $rc" >&2
+        return "$rc"
+    fi
+
+    selected=${choice##*$'\t'}
+    is_mode "$selected" || {
+        echo "pocket4-thermal-mode: fzf returned an unknown mode: $choice" >&2
+        return 1
+    }
+    [ "$selected" = "$current" ] || set_mode "$selected"
+}
+
 case "${1:-cycle}" in
     cycle)
         # Explicit round-robin: quiet -> chill -> balanced -> performance -> quiet.
@@ -78,9 +148,10 @@ case "${1:-cycle}" in
         ;;
     next) step +1 ;;
     prev) step -1 ;;
+    pick) pick ;;
     set)
         want="${2:-}"
-        printf '%s\n' "${MODES[@]}" | grep -qx "$want" \
+        is_mode "$want" \
             || { echo "usage: $0 set {${MODES[*]}}" >&2; exit 2; }
         set_mode "$want"
         ;;
@@ -106,5 +177,5 @@ case "${1:-cycle}" in
         printf '{"text":"%s","class":"%s","tooltip":"Thermal: %s — %s\\n%s°C · %s RPM\\nTap to cycle"}\n' \
             "$icon" "$mode" "$mode" "$desc" "${temp:-?}" "${rpm:-?}"
         ;;
-    *) echo "usage: $0 {cycle|next|prev|set <mode>|get|status}" >&2; exit 2 ;;
+    *) echo "usage: $0 {cycle|next|prev|pick|set <mode>|get|status}" >&2; exit 2 ;;
 esac

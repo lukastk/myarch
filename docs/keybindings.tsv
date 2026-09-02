@@ -9,6 +9,7 @@ Super+M	End Hyprland session
 Super+N	Network panel
 Super+Shift+N	Bluetooth panel
 Super+Ctrl+I	Choose the PipeWire recording input
+Super+Ctrl+P	Choose Pocket thermal / power mode
 Super+Arrow	Focus window
 Super+Shift+Arrow	Move window
 Super+[ / Super+]	Focus previous / next monitor

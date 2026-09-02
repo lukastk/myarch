@@ -73,6 +73,9 @@ myarch theme pick
 
 myarch panel audio|network|bluetooth|display|power|tailscale
 
+# Pocket 4 only: choose quiet/chill/balanced/performance with fzf
+pocket4-thermal-mode pick
+
 myarch capture screenshot [region|fullscreen]
 myarch capture text
 myarch capture qr

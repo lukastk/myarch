@@ -69,6 +69,16 @@ hl.window_rule({
     float = true,
 })
 
+{% if 'pocket4' in targets %}
+-- The Super+Ctrl+P thermal-mode fzf picker is another one-off terminal. Keep
+-- it out of the tiling grid; its size comes from termCells at launch.
+hl.window_rule({
+    name  = "float-thermal-mode-pick",
+    match = { class = "^thermal-mode-pick$" },
+    float = true,
+})
+{% endif %}
+
 -- The Super+Ctrl+D Voxtype settings TUI is transient and must not reflow the
 -- windows the user was dictating into.
 hl.window_rule({

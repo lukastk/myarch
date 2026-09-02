@@ -41,6 +41,16 @@ hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd(
 hl.bind(mainMod .. " + CTRL + I", hl.dsp.exec_cmd(
     terminal .. " --app-id=audio-input-pick " .. termCells(72, 16) ..
     " -e {{ home }}/.mybin/audio-input"))
+{% if 'pocket4' in targets %}
+-- The keyboard/terminal counterpart to tapping the Pocket thermal button. The
+-- existing tap/secondary-tap cycle remains intact; this opens fzf directly on
+-- the current quiet/chill/balanced/performance mode for random-access selection.
+-- Like the input picker above, fzf needs a TTY, a compact character-cell-sized
+-- terminal, and a dedicated app-id so the window rule can float it.
+hl.bind(mainMod .. " + CTRL + P", hl.dsp.exec_cmd(
+    terminal .. " --app-id=thermal-mode-pick " .. termCells(72, 10) ..
+    " -e {{ home }}/.mybin/pocket4-thermal-mode pick"))
+{% endif %}
 
 -- Launcher that drops the chosen app into the scratchpad (≙ Super+R, then
 -- Super+ALT+S to stash it, then Super+S to reveal it).

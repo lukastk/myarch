@@ -20,7 +20,7 @@ The GPD Pocket 4 panel is physically portrait (`1600×2560`) and mounted sideway
 - `pocket4-display` — orientation, flip, scale; changes monitor and touchscreen transforms together.
 - `pocket4-tablet-mode` — explicit 1.6/2.0 state; there is no reliable physical tablet-mode sensor.
 - `pocket4-osk` — spawn-to-show / kill-to-hide `wvkbd-deskintl`; running equals visible.
-- `pocket4-thermal-mode` — delegates to `pocket4-mode`; quiet/chill/balanced/performance set both CPU envelope and fan curve.
+- `pocket4-thermal-mode` — delegates to `pocket4-mode`; quiet/chill/balanced/performance set both CPU envelope and fan curve. `pocket4-thermal-mode pick` opens the fzf selector (also bound to `Super+Ctrl+P`), while the Waybar button keeps cycling modes.
 - `pocket4-ws` / watcher — Lua-compatible workspace dispatch and event-driven bar refresh.
 - Hyprgrass — touchscreen gestures inside the compositor; no direct evdev ACL/daemon.
 
@@ -37,7 +37,7 @@ For any Pocket UI/display change:
 5. Touch all four panel corners after rotation.
 6. Test three-finger horizontal/up and four-finger-up.
 7. Toggle OSK by bar, CLI, and gesture; verify dimensions in both orientations.
-8. Cycle thermal modes and compare bar state with `pocket4-mode status`.
+8. Cycle thermal modes from Waybar, choose one with `Super+Ctrl+P` and `pocket4-thermal-mode pick`, and compare bar state with `pocket4-mode status`.
 9. Test dictation hold, latch, cleanup, cancel, and touch finish.
 10. Restore landscape desktop state.
 
