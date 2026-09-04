@@ -241,7 +241,10 @@ class RenderTests(unittest.TestCase):
     def test_voxtype_config_and_adapter_preserve_dictation_contract(self) -> None:
         config_template = ROOT / "home/.config/voxtype/config.toml.jinja"
         adapter_template = ROOT / "home/.mybin/voxtype-key.jinja"
-        for profile, expected_volume in (("pocket4", "25%"), ("ideapad", "unchanged")):
+        for profile, expected_volume, expected_source in (
+            ("pocket4", "25%", "alsa_input.pci-0000_c5_00.6.analog-stereo"),
+            ("ideapad", "unchanged", ""),
+        ):
             context = self.context(profile)
             rendered_config = self.env.from_string(config_template.read_text()).render(**context)
             config = tomllib.loads(rendered_config)
@@ -256,6 +259,7 @@ class RenderTests(unittest.TestCase):
 
                 adapter = self.env.from_string(adapter_template.read_text()).render(**context)
                 self.assertIn(f'CAPTURE_VOLUME = "{expected_volume}"', adapter)
+                self.assertIn(f'CAPTURE_SOURCE = "{expected_source}"', adapter)
                 self.assertIn('[VOXTYPE, "record", "start"]', adapter)
                 self.assertIn('[VOXTYPE, "record", command]', adapter)
                 self.assertIn('HOLD_THRESHOLD_SECONDS = 0.350', adapter)
@@ -263,6 +267,60 @@ class RenderTests(unittest.TestCase):
                 self.assertIn('["systemctl", "--user", "restart", "voxtype.service"]', adapter)
                 self.assertNotIn("shell=True", adapter)
                 compile(adapter, adapter_template.as_posix(), "exec")
+
+    def test_dictation_gain_compensation_is_scoped_to_its_measured_source(self) -> None:
+        """The 25% is calibration for the Pocket's built-in mic, not a policy.
+
+        pactl percentages are cubic, so 25% is -36.12 dB. Applied to whatever
+        source happens to be selected it silently destroys mics with no headroom
+        to spare: measured on pocket4 2026-09-04, speech into the Nothing Ear (a)
+        peaked at 20235/32768 at 100% and at 39 at 25%. And because the restore
+        re-resolved @DEFAULT_SOURCE@ instead of naming the source it attenuated,
+        a headset that disconnected mid-dictation kept the attenuation - which
+        WirePlumber then persisted across reboots.
+        """
+        adapter = (ROOT / "home/.mybin/voxtype-key.jinja").read_text()
+
+        # Every volume call names its source; none re-resolve the default.
+        # (Comments may still discuss @DEFAULT_SOURCE@ - the code may not use it.)
+        code = "\n".join(
+            line for line in adapter.splitlines() if not line.lstrip().startswith("#")
+        )
+        self.assertNotIn("@DEFAULT_SOURCE@", code)
+        self.assertIn("def get_source_volume(source: str) -> str:", adapter)
+        self.assertIn("def set_source_volume(source: str, value: str) -> None:", adapter)
+        self.assertIn('["pactl", "get-source-volume", source]', adapter)
+        self.assertIn('["pactl", "set-source-volume", source, value]', adapter)
+
+        # The transaction runs only for the source the profile measured it for,
+        # and the restore is addressed to the source recorded in the state.
+        self.assertIn("if default_source() == CAPTURE_SOURCE:", adapter)
+        self.assertIn('"volume_source": volume_source,', adapter)
+        self.assertIn('source = state.get("volume_source")', adapter)
+        self.assertIn("missing attenuated source in Voxtype adapter state", adapter)
+
+        for profile_name in ("pocket4", "ideapad"):
+            with (ROOT / "profiles" / f"{profile_name}.toml").open("rb") as stream:
+                dictation = tomllib.load(stream)["dictation"]
+            with self.subTest(profile=profile_name):
+                self.assertIn("source_volume_source", dictation)
+                if dictation["source_volume"] == "unchanged":
+                    self.assertEqual("", dictation["source_volume_source"])
+                else:
+                    self.assertTrue(dictation["source_volume_source"])
+
+        # A profile may not ask for an attenuation without naming its target.
+        installer = runpy.run_path((ROOT / "install.py").as_posix(), run_name="__not_main__")
+        validate = installer["validate_dictation"]
+        validate(Path("ok.toml"), {"dictation": {"source_volume": "25%", "source_volume_source": "mic"}})
+        validate(Path("ok.toml"), {"dictation": {"source_volume": "unchanged", "source_volume_source": ""}})
+        for bad in (
+            {"source_volume": "25%", "source_volume_source": ""},
+            {"source_volume": "unchanged", "source_volume_source": "mic"},
+            {"source_volume": "25"},
+        ):
+            with self.subTest(bad=bad), self.assertRaises(SystemExit):
+                validate(Path("bad.toml"), {"dictation": bad})
 
     def test_voxtype_replaces_mydictation_runtime_ownership(self) -> None:
         for profile_name in ("pocket4", "ideapad"):

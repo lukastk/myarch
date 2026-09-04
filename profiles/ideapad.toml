@@ -5,7 +5,10 @@ touchscreen = false
 voxtype = true
 
 [dictation]
+# No gain compensation on this machine, so no source to scope it to. Both keys
+# are required in every profile; see profiles/pocket4.toml for what they mean.
 source_volume = "unchanged"
+source_volume_source = ""
 
 [plugins]
 hyprexpo = true

@@ -85,7 +85,32 @@ def load_profile(name: str) -> dict:
     profile = read_toml(path)
     if profile.get("name") != name:
         raise SystemExit(f"{path}: name must be {name!r}")
+    validate_dictation(path, profile)
     return profile
+
+
+def validate_dictation(path: Path, profile: dict) -> None:
+    """A dictation gain compensation must name the source it was measured for.
+
+    Fail here rather than at the first Super+D: an attenuation applied to an
+    unnamed source lands on whatever happens to be selected, and WirePlumber
+    persists route volumes, so the damage outlives the session that caused it.
+    """
+    dictation = profile.get("dictation")
+    if not isinstance(dictation, dict):
+        raise SystemExit(f"{path}: missing [dictation]")
+    missing = {"source_volume", "source_volume_source"} - dictation.keys()
+    if missing:
+        raise SystemExit(f"{path}: [dictation] missing {sorted(missing)}")
+    volume = dictation["source_volume"]
+    source = dictation["source_volume_source"]
+    if volume != "unchanged" and not re.fullmatch(r"\d+%", str(volume)):
+        raise SystemExit(f"{path}: [dictation] source_volume must be 'unchanged' or N%, got {volume!r}")
+    if volume == "unchanged":
+        if source:
+            raise SystemExit(f"{path}: [dictation] source_volume_source is set but source_volume is 'unchanged'")
+    elif not source:
+        raise SystemExit(f"{path}: [dictation] source_volume={volume!r} must name source_volume_source")
 
 
 def load_theme(name: str) -> dict:

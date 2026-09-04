@@ -2,8 +2,8 @@
 """myarch's compositor and touch adapter for Voxtype.
 
 Voxtype remains the recorder/transcriber/output authority. This adapter preserves
-myarch's existing hold-to-talk / tap-to-latch gesture, Pocket microphone gain
-transaction, cleanup-profile shortcuts, and touch-safe Waybar controls.
+myarch's existing hold-to-talk / tap-to-latch gesture, Pocket built-in-microphone
+gain transaction, cleanup-profile shortcuts, and touch-safe Waybar controls.
 """
 
 from __future__ import annotations
@@ -23,6 +23,10 @@ import uuid
 
 HOLD_THRESHOLD_SECONDS = 0.350
 CAPTURE_VOLUME = {{ profile.dictation.source_volume | tojson }}
+# The ONE recording source CAPTURE_VOLUME describes. See the profile for why the
+# gain compensation is scoped to a named source rather than applied to whatever
+# happens to be selected.
+CAPTURE_SOURCE = {{ profile.dictation.source_volume_source | tojson }}
 RUNTIME = Path(os.environ["XDG_RUNTIME_DIR"]) / "myarch" / "voxtype"
 STATE = RUNTIME / "session.json"
 LOCK = RUNTIME / "lock"
@@ -127,19 +131,26 @@ def ensure_daemon() -> None:
     raise RuntimeError(f"Voxtype daemon did not become ready: {last_error}")
 
 
-def get_source_volume() -> str:
+def default_source() -> str:
+    name = run(["pactl", "get-default-source"], capture=True).stdout.strip()
+    if not name:
+        raise RuntimeError("PipeWire returned an empty default source")
+    return name
+
+
+def get_source_volume(source: str) -> str:
     result = run(
-        ["pactl", "get-source-volume", "@DEFAULT_SOURCE@"],
+        ["pactl", "get-source-volume", source],
         capture=True,
     )
     match = _VOLUME_RE.search(result.stdout)
     if match is None:
-        raise RuntimeError(f"could not parse default microphone volume: {result.stdout!r}")
+        raise RuntimeError(f"could not parse {source} microphone volume: {result.stdout!r}")
     return match.group(1)
 
 
-def set_source_volume(value: str) -> None:
-    run(["pactl", "set-source-volume", "@DEFAULT_SOURCE@", value])
+def set_source_volume(source: str, value: str) -> None:
+    run(["pactl", "set-source-volume", source, value])
 
 
 def restore_session(token: str) -> bool:
@@ -148,9 +159,21 @@ def restore_session(token: str) -> bool:
         return False
     previous = state.get("previous_volume")
     if previous is not None:
+        # Restore the source this session actually attenuated, BY NAME. Resolving
+        # @DEFAULT_SOURCE@ a second time would put the gain back on whatever is
+        # selected NOW, and the two differ exactly when it matters: a Bluetooth
+        # headset that disconnects mid-dictation, an autoswitch back out of the
+        # HFP profile, or Super+Ctrl+I picking another mic while recording. The
+        # attenuation would then be stranded on the original source - and
+        # WirePlumber persists route volumes across reboots, so it stays
+        # stranded. That is how the Nothing Ear (a) came to sit at 25% (-36.12
+        # dB) in every application (pocket4, 2026-09-04).
+        source = state.get("volume_source")
+        if not isinstance(source, str) or not source:
+            raise RuntimeError("missing attenuated source in Voxtype adapter state")
         if not isinstance(previous, str) or not previous.isdigit():
             raise RuntimeError("invalid saved microphone volume in Voxtype adapter state")
-        set_source_volume(previous)
+        set_source_volume(source, previous)
     clear_state()
     signal_waybar()
     return True
@@ -175,11 +198,20 @@ def begin(*, mode: str, cleanup: bool, pressed_at: float) -> None:
         raise RuntimeError(f"cannot start dictation while Voxtype is {current_phase}")
 
     previous_volume = None
+    volume_source = None
     if CAPTURE_VOLUME != "unchanged":
         if not re.fullmatch(r"\d+%", CAPTURE_VOLUME):
             raise RuntimeError(f"invalid profile dictation source volume: {CAPTURE_VOLUME!r}")
-        previous_volume = get_source_volume()
-        set_source_volume(CAPTURE_VOLUME)
+        if not CAPTURE_SOURCE:
+            raise RuntimeError("profile sets a dictation source volume without naming its source")
+        # Only the source the profile measured the compensation for. Every other
+        # source records at its own gain: the attenuation is calibration for one
+        # microphone, not a dictation-wide policy, and applying it to a mic with
+        # no headroom silently records nothing at all.
+        if default_source() == CAPTURE_SOURCE:
+            volume_source = CAPTURE_SOURCE
+            previous_volume = get_source_volume(volume_source)
+            set_source_volume(volume_source, CAPTURE_VOLUME)
 
     token = uuid.uuid4().hex
     state = {
@@ -188,6 +220,7 @@ def begin(*, mode: str, cleanup: bool, pressed_at: float) -> None:
         "pressed_at": pressed_at,
         "cleanup": cleanup,
         "previous_volume": previous_volume,
+        "volume_source": volume_source,
     }
     state_written = False
     try:
@@ -207,7 +240,7 @@ def begin(*, mode: str, cleanup: bool, pressed_at: float) -> None:
         if state_written:
             restore_session(token)
         elif previous_volume is not None:
-            set_source_volume(previous_volume)
+            set_source_volume(volume_source, previous_volume)
         raise
 
     spawn_monitor(token)

@@ -5,7 +5,23 @@ touchscreen = true
 voxtype = true
 
 [dictation]
+# The Pocket's built-in analog microphone is far too hot for the transcriber at
+# its default gain, so dictation lowers it for the duration of capture and puts
+# it back afterwards.
+#
+# That compensation is a property of THAT ONE microphone, so the profile names
+# it: `source_volume_source` is the only source the transaction may touch. Any
+# other recording source Super+Ctrl+I selects - a Bluetooth headset, a USB mic -
+# records at its own gain, untouched.
+#
+# It is not a matter of taste. pactl percentages are cubic, so "25%" is -36.12
+# dB, and a Bluetooth HFP microphone has no headroom to give up: measured on
+# pocket4 2026-09-04 with the Nothing Ear (a), the same speech recorded at 100%
+# peaked at 20235/32768 and at 25% peaked at 39 - under the noise floor. Voxtype
+# transcribed silence and typed nothing, which is what an unscoped transaction
+# looks like from the keyboard.
 source_volume = "25%"
+source_volume_source = "alsa_input.pci-0000_c5_00.6.analog-stereo"
 
 [plugins]
 hyprexpo = true
