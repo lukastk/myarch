@@ -62,10 +62,10 @@ if [[ $config_only == false ]]; then
   sudo pacman -S --noconfirm --needed "${packages[@]}"
 
   if ! command -v paru >/dev/null 2>&1; then
-    echo "Voxtype installation requires paru for the official voxtype-bin AUR package" >&2
+    echo "myarch desktop application installation requires paru for AUR packages" >&2
     exit 1
   fi
-  paru -S --noconfirm --needed voxtype-bin
+  paru -S --noconfirm --needed ticktick voxtype-bin
 fi
 
 args=(--profile "$profile")
