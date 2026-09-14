@@ -1,0 +1,37 @@
+# Launch flags myarch writes for Chromium-based apps, per desktop mode.
+#
+# Arch's `brave` and `obsidian` launchers read one flag per line from
+# $XDG_CONFIG_HOME/<app>-flags.conf at every launch. Those files are GENERATED
+# from this one by ~/.mybin/myarch-app-flags — at every myarch install, and by
+# pocket4-tablet-mode on every toggle — so they always match the current mode.
+# Edit this file, never the generated ones.
+#
+# A running app keeps the flags it was started with: switching mode reaches Brave
+# or Obsidian the next time it is launched.
+
+# Flags added in tablet mode to every app with `tablet = true`.
+#
+# They make Chromium treat a finger as the PRIMARY pointer, so web pages and
+# Electron apps see `(pointer: coarse)` and `(hover: none)` — exactly what a
+# phone reports, and what their touch layouts key off: controls normally
+# revealed on hover become always visible (YouTube's player controls,
+# obako/mysystem's row actions and convo buttons in Obsidian).
+#
+# Without them pocket4 reports `pointer: fine` / `hover: hover` even with the
+# keyboard folded away, because the touchpad still exists; the touchscreen only
+# shows up as `any-pointer: coarse`. Enum values are Chromium's:
+# PointerType NONE=1 COARSE=2 FINE=4, HoverType NONE=1 HOVER=2. Measured
+# 2026-09-04 in Brave: these settings flip pointer:coarse and hover:none to true,
+# and the inverse values flip them back, so it is a genuine override.
+[tablet]
+flags = ["--blink-settings=availablePointerTypes=2,primaryPointerType=2,availableHoverTypes=1,primaryHoverType=1"]
+
+[apps.brave]
+file = "brave-flags.conf"
+always = ["--ozone-platform-hint=auto"]
+tablet = true
+
+[apps.obsidian]
+file = "obsidian-flags.conf"
+always = []
+tablet = true

@@ -12,6 +12,10 @@
 #
 # What tablet mode does:
 #   - a larger scale, so touch targets are hittable with a finger
+#   - tells Chromium-based apps a finger is now the primary pointer, via their
+#     launcher flags files (see ~/.config/myarch/app-flags.toml), so pages and
+#     Obsidian report `(hover: none)` and show their touch layouts. An app that is
+#     already running keeps its flags until it is next launched.
 #
 # That is ALL it does now. It used to also start lisgd for touchscreen
 # gestures; gestures moved to the hyprgrass plugin (installed by
@@ -81,11 +85,24 @@ set_scale() {
 #     name (^pocket4^pocket4-osk) — so the resolved sibling path does not exist.
 #     Use the installed path.
 OSK="$HOME/.mybin/pocket4-osk"
+APP_FLAGS="$HOME/.mybin/myarch-app-flags"
+
+# The flags reach an app only when it next starts, so say so when one is open —
+# otherwise the toggle looks like it did nothing to it.
+note_running_apps() {
+    local running=()
+    pgrep -x brave >/dev/null && running+=(Brave)
+    pgrep -x obsidian >/dev/null && running+=(Obsidian)
+    [ ${#running[@]} -eq 0 ] && return 0
+    notify-send "Tablet mode $1" "Restart ${running[*]} to switch its touch layout."
+}
 
 # Leaving tablet mode still STOPS the keyboard, so exiting cannot strand a
 # keyboard on screen — but entering it does not start one.
-on()  { set_scale "$SCALE_TABLET";  echo on  > "$STATE"; }
-off() { set_scale "$SCALE_DESKTOP"; "$OSK" hide; echo off > "$STATE"; }
+# App flags are written FIRST: if that fails, set -e stops before the scale or
+# $STATE change, so the button can never claim a mode the apps were not given.
+on()  { "$APP_FLAGS" write --mode tablet >/dev/null; set_scale "$SCALE_TABLET";  echo on  > "$STATE"; note_running_apps on; }
+off() { "$APP_FLAGS" write --mode laptop >/dev/null; set_scale "$SCALE_DESKTOP"; "$OSK" hide; echo off > "$STATE"; note_running_apps off; }
 
 case "${1:-toggle}" in
     on)     on ;;
@@ -95,9 +112,9 @@ case "${1:-toggle}" in
         # waybar `return-type: json`. "class" drives the CSS so the button
         # visibly differs when tablet mode is active.
         if [ "$(cat "$STATE" 2>/dev/null || echo off)" = "on" ]; then
-            printf '{"text":"\xf3\xb0\x93\xb7","class":"on","tooltip":"Tablet mode ON (large scale) — tap to exit"}\n'
+            printf '{"text":"\xf3\xb0\x93\xb7","class":"on","tooltip":"Tablet mode ON (large scale, touch layouts in Brave/Obsidian) — tap to exit"}\n'
         else
-            printf '{"text":"\xf3\xb0\x93\xb7","class":"off","tooltip":"Tablet mode off — tap to enable the large touch scale"}\n'
+            printf '{"text":"\xf3\xb0\x93\xb7","class":"off","tooltip":"Tablet mode off — tap for the large touch scale and touch layouts"}\n'
         fi
         ;;
     toggle) if [ "$(cat "$STATE" 2>/dev/null || echo off)" = "on" ]; then off; else on; fi ;;

@@ -224,6 +224,31 @@ def install_symlink(source: Path, destination: Path, stamp: str) -> None:
     destination.symlink_to(source)
 
 
+def app_flags_mode(profile_name: str) -> str:
+    """The desktop mode <app>-flags.conf must match: only pocket4 has a tablet mode."""
+    if profile_name != "pocket4":
+        return "laptop"
+    # pocket4-tablet-mode is the authority on its own state.
+    state = subprocess.run(
+        [(HOME / ".mybin/pocket4-tablet-mode").as_posix(), "get"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    if state not in {"on", "off"}:
+        raise RuntimeError(f"pocket4-tablet-mode get returned {state!r}, expected on or off")
+    return "tablet" if state == "on" else "laptop"
+
+
+def write_app_flags(profile_name: str) -> list[Path]:
+    result = subprocess.run(
+        [(HOME / ".mybin/myarch-app-flags").as_posix(), "write", "--mode", app_flags_mode(profile_name)],
+        capture_output=True, text=True, check=True,
+    )
+    written = [Path(line) for line in result.stdout.splitlines() if line.strip()]
+    if not written:
+        raise RuntimeError("myarch-app-flags wrote no files")
+    return written
+
+
 def render_home(profile_name: str, profile: dict, theme_name: str, theme: dict) -> list[Path]:
     env = Environment(undefined=StrictUndefined, keep_trailing_newline=True, autoescape=False)
     context = {
@@ -252,6 +277,11 @@ def render_home(profile_name: str, profile: dict, theme_name: str, theme: dict) 
         else:
             install_symlink(source, destination, stamp)
         installed.append(destination)
+
+    # <app>-flags.conf depend on the desktop mode, which changes at runtime, so
+    # they are generated rather than linked — by the same command
+    # pocket4-tablet-mode runs on every toggle, just installed above.
+    installed.extend(write_app_flags(profile_name))
 
     fragments = sorted((REPO / "src/hyprland").glob("*.lua.jinja"))
     if not fragments:

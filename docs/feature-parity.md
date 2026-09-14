@@ -10,7 +10,7 @@ A myarch change is incomplete if it regresses any item below.
 | IdeaPad gestures | Native three-finger horizontal workspace movement; upward trackpad swipe remains unbound |
 | Pocket gestures | Hyprgrass three-finger horizontal/up and four-finger OSK |
 | Pocket display/touch | Rotation always changes panel and touchscreen together; orientation, flip, and scale remain explicit |
-| Pocket tablet mode | Manual 1.6↔2.0 toggle; exiting hides OSK; no fabricated auto-detection |
+| Pocket tablet mode | Manual 1.6↔2.0 toggle; exiting hides OSK; Brave/Obsidian get touch-pointer launch flags (next launch); no fabricated auto-detection |
 | Pocket OSK | Running equals visible; CLI/bar/gesture toggle; portrait and landscape dimensions |
 | Pocket thermals | quiet/chill/balanced/performance coordinate power limits and fan curve through `pocket4-mode` |
 | Pocket bar | Correct one/two-row layout and hit mapping at logical widths 1600/1280/1000/800 |
