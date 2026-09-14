@@ -18,8 +18,17 @@ myarch is an Arch Linux/Hyprland desktop repository installed on Pocket 4 and Id
 - `home/` owns user configuration and commands.
 - `profiles/` owns explicit hardware contracts; never autodetect profile.
 - `themes/` must all expose the exact same semantic key set.
+- `install.sh` is the entry point: the Arch-only guard, argument parsing, the complete pacman package set, and the paru AUR packages (`ticktick`, `voxtype-bin`). Add desktop packages there. It then hands off to `install.py`.
 - `install.py` owns rendering, state migration, system integration, plugins, and coherent reload.
 - Myrig owns fleet composition, clone order, private wallpapers, RustDesk policy, Pocket system provisioning, server mode, backups, Sesh, and subswitcher.
+
+## Installing
+
+```bash
+./install.sh --profile pocket4|ideapad [--theme <name>] [--config-only] [--skip-runtime]
+```
+
+`--profile` is required. myrig's `myarch` target runs `install.sh --profile <machine>` on each Arch machine during `myrig-reinstall`, so a fleet update redeploys myarch. `--config-only` renders and reloads without package, service, plugin, or external-integration work. `--skip-runtime` is for provisioning without a Hyprland session; plugin work is deferred until the installer is rerun inside Hyprland.
 
 ## Required checks
 
