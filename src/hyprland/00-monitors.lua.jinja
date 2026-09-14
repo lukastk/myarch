@@ -35,12 +35,41 @@
 --
 -- scale: 2560x1600 on an 8.8" panel is ~343 PPI, so "auto" does not pick
 -- anything sensible. 1.6 divides cleanly (2560/1.6 = 1600, 1600/1.6 = 1000).
--- TUNE THIS LIVE before trusting it: hyprctl keyword monitor "eDP-1,preferred,auto,<scale>,transform,3"
+-- TUNE THIS LIVE before trusting it:
+--   hyprctl eval 'hl.monitor({ output = "eDP-1", mode = "preferred", position = "auto", scale = <scale>, transform = 3 })'
+--
+-- Tablet mode's scale (pocket4-tablet-mode) is read from ITS state file here,
+-- not hardcoded. This file is re-evaluated on every config reload — each myarch
+-- install reloads — and a literal 1.6 used to put the panel back at the desktop
+-- scale while ~/.cache/pocket4/tablet-mode still said "on". That left the bar
+-- button claiming tablet mode, and Brave/Obsidian's launcher flags (which follow
+-- that state) set for touch, on a desktop-scaled screen (seen 2026-09-14).
+-- A missing file means tablet mode was never switched on, as for
+-- `pocket4-tablet-mode get`; anything but on/off is a broken state file and
+-- fails the config loudly rather than guessing. The two scales must match
+-- SCALE_DESKTOP / SCALE_TABLET in pocket4-tablet-mode (pinned by
+-- tests/test_render.py).
+local POCKET4_SCALE_DESKTOP = 1.6
+local POCKET4_SCALE_TABLET  = 2.0
+
+local function pocket4_tablet_mode_on()
+    local cache = os.getenv("XDG_CACHE_HOME")
+    if cache == nil or cache == "" then cache = os.getenv("HOME") .. "/.cache" end
+    local path = cache .. "/pocket4/tablet-mode"
+    local file = io.open(path, "r")
+    if file == nil then return false end
+    local state = file:read("*l")
+    file:close()
+    if state == "on" then return true end
+    if state == "off" then return false end
+    error("pocket4 tablet-mode state " .. path .. " must be 'on' or 'off', got " .. tostring(state))
+end
+
 hl.monitor({
     output    = "eDP-1",
     mode      = "preferred",
     position  = "auto",
-    scale     = 1.6,
+    scale     = pocket4_tablet_mode_on() and POCKET4_SCALE_TABLET or POCKET4_SCALE_DESKTOP,
     transform = 3,
 })
 

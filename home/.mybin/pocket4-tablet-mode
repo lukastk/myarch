@@ -37,13 +37,37 @@ STATE="$STATE_DIR/tablet-mode"
 mkdir -p "$STATE_DIR"
 
 MON="eDP-1"
-SCALE_DESKTOP=1.6   # matches hyprland.lua.jinja's boot-time value
-SCALE_TABLET=2.0    # bigger touch targets
+SCALE_DESKTOP=1.6   # must match POCKET4_SCALE_DESKTOP in src/hyprland/00-monitors.lua.jinja,
+SCALE_TABLET=2.0    # and POCKET4_SCALE_TABLET — the config reads $STATE on every reload (tested)
+
+# Poll until the panel reports scale $1 and transform $2, or fail loudly.
+wait_for_panel() {
+    local s="$1" t="$2" i
+    for i in $(seq 20); do
+        if hyprctl monitors -j | jq -e --arg mon "$MON" --argjson s "$s" --argjson t "$t" \
+            '.[] | select(.name == $mon) | ((.scale - $s) * (.scale - $s) < 0.0001) and (.transform == $t)' >/dev/null; then
+            return 0
+        fi
+        sleep 0.1
+    done
+    echo "$(basename "$0"): $MON did not reach scale $s transform $t (now: $(hyprctl monitors -j | jq -c --arg mon "$MON" '.[] | select(.name == $mon) | {scale, transform}'))" >&2
+    return 1
+}
 
 set_scale() {
     local s="$1" t
     t=$(hyprctl monitors -j | jq -r '.[0].transform')
     hyprctl eval "hl.monitor({ output = \"$MON\", mode = \"preferred\", position = \"auto\", scale = $s, transform = $t })" >/dev/null
+    # A runtime hl.monitor() only REGISTERS the rule on this Hyprland (0.56, Lua
+    # config): it answers "ok" and nothing changes until the rules are re-applied,
+    # which hl.dsp.force_renderer_reload() does. It is a DISPATCHER, so it goes
+    # through `hyprctl dispatch`, not `eval` (display-mode's trap 2). Without it
+    # this script silently did nothing to the panel (found 2026-09-14: tablet
+    # mode left the scale at 1.6, rotation left transform 3). Then CHECK the
+    # panel really got there, so a future change in that behaviour fails loudly
+    # instead of reporting success.
+    hyprctl dispatch 'hl.dsp.force_renderer_reload()' >/dev/null
+    wait_for_panel "$s" "$t"
 
     # WAYBAR DOES NOT REFLOW ON A SCALE CHANGE, so the bar is bounced here for
     # the same reason display-mode bounces it after a layout change: changing the

@@ -108,6 +108,76 @@ class RenderTests(unittest.TestCase):
             self.assertIn("hl.monitor", rendered)
             self.assertIn("hl.bind", rendered)
 
+    def _run_monitor_fragment(self, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+        rendered = self.env.from_string((ROOT / "src/hyprland/00-monitors.lua.jinja").read_text()).render(**self.context("pocket4"))
+        stub = 'hl = { monitor = function(m) print("scale=" .. tostring(m.scale) .. " transform=" .. tostring(m.transform)) end, device = function(d) end }\n'
+        return subprocess.run([shutil.which("lua") or "lua", "-"], input=stub + rendered, env=env, capture_output=True, text=True)
+
+    def test_pocket4_monitor_scale_survives_config_reloads(self) -> None:
+        # The monitor fragment is re-evaluated on every Hyprland config reload;
+        # its scale must come from tablet mode's state, not a literal.
+        if shutil.which("lua") is None:
+            self.skipTest("no lua interpreter")
+        with tempfile.TemporaryDirectory() as temporary:
+            cache = Path(temporary) / "cache"
+            state = cache / "pocket4/tablet-mode"
+            base = {"PATH": os.environ["PATH"], "HOME": temporary, "XDG_CACHE_HOME": cache.as_posix()}
+
+            missing = self._run_monitor_fragment(base)
+            self.assertEqual(0, missing.returncode, missing.stderr)
+            self.assertEqual("scale=1.6 transform=3", missing.stdout.strip())
+
+            state.parent.mkdir(parents=True)
+            for content, expected in (("on\n", "scale=2.0"), ("off\n", "scale=1.6")):
+                state.write_text(content)
+                result = self._run_monitor_fragment(base)
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual(f"{expected} transform=3", result.stdout.strip())
+
+            # Same path rule as pocket4-tablet-mode's ${XDG_CACHE_HOME:-$HOME/.cache}.
+            home_state = Path(temporary) / ".cache/pocket4/tablet-mode"
+            home_state.parent.mkdir(parents=True)
+            home_state.write_text("on\n")
+            empty = self._run_monitor_fragment(dict(base, XDG_CACHE_HOME=""))
+            self.assertEqual("scale=2.0 transform=3", empty.stdout.strip(), empty.stderr)
+
+            state.write_text("maybe\n")
+            broken = self._run_monitor_fragment(base)
+            self.assertNotEqual(0, broken.returncode)
+            self.assertIn("must be 'on' or 'off'", broken.stderr)
+
+        lua = (ROOT / "src/hyprland/00-monitors.lua.jinja").read_text()
+        script = (ROOT / "home/.mybin/pocket4-tablet-mode").read_text()
+        desktop = re.search(r"^SCALE_DESKTOP=([0-9.]+)", script, re.M).group(1)
+        tablet = re.search(r"^SCALE_TABLET=([0-9.]+)", script, re.M).group(1)
+        self.assertEqual(float(desktop), float(re.search(r"POCKET4_SCALE_DESKTOP\s*=\s*([0-9.]+)", lua).group(1)))
+        self.assertEqual(float(tablet), float(re.search(r"POCKET4_SCALE_TABLET\s*=\s*([0-9.]+)", lua).group(1)))
+        self.assertIn('STATE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/pocket4"', script)
+        self.assertIn('STATE="$STATE_DIR/tablet-mode"', script)
+        ideapad = self.env.from_string(lua).render(**self.context("ideapad"))
+        self.assertNotIn("tablet-mode", ideapad)
+
+    def test_pocket4_runtime_monitor_changes_are_applied_and_verified(self) -> None:
+        # On Hyprland 0.56 a runtime hl.monitor() only registers the rule ("ok",
+        # nothing changes) until hl.dsp.force_renderer_reload() is DISPATCHED.
+        # Measured on pocket4 2026-09-14: without it tablet mode never changed the
+        # scale and pocket4-display never rotated. Both must also check the panel
+        # really got there.
+        for name, scale_var, transform_var in (("pocket4-tablet-mode", "$s", "$t"), ("pocket4-display", "$s", "$t")):
+            with self.subTest(script=name):
+                script = (ROOT / "home/.mybin" / name).read_text()
+                self.assertIn("set -euo pipefail", script)
+                lines = script.splitlines()
+                evals = [i for i, line in enumerate(lines) if "hyprctl eval" in line and "hl.monitor(" in line]
+                self.assertTrue(evals)
+                for index in evals:
+                    rest = "\n".join(lines[index:index + 16])
+                    self.assertIn("hyprctl dispatch 'hl.dsp.force_renderer_reload()'", rest)
+                    self.assertIn(f'wait_for_panel "{scale_var}" "{transform_var}"', rest)
+                    # A reload dispatched through eval would be built and discarded.
+                    self.assertNotIn("hyprctl eval 'hl.dsp.force_renderer_reload", rest)
+                self.assertRegex(script, r"wait_for_panel\(\) \{[\s\S]*?return 1\n\}")
+
     def test_three_finger_up_is_touchscreen_only(self) -> None:
         template = (ROOT / "src/hyprland/60-gestures.lua.jinja").read_text()
         pocket = self.env.from_string(template).render(**self.context("pocket4"))
