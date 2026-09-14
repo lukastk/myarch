@@ -48,6 +48,9 @@ repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 if [[ $config_only == false ]]; then
   packages=(
     hyprland uwsm hyprpaper hyprlock hypridle hyprpolkitagent
+    # Arch split hyprpm out of the hyprland package in 0.56.2-3; install.py's
+    # plugin step and the autostart's `hyprpm reload` both need it.
+    hyprpm
     xdg-desktop-portal-hyprland xdg-desktop-portal-gtk
     waybar wofi mako libnotify
     grim slurp hyprpicker cliphist wl-clipboard
