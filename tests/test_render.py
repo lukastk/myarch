@@ -105,6 +105,15 @@ class RenderTests(unittest.TestCase):
             self.assertIn("hl.monitor", rendered)
             self.assertIn("hl.bind", rendered)
 
+    def test_three_finger_up_is_touchscreen_only(self) -> None:
+        template = (ROOT / "src/hyprland/60-gestures.lua.jinja").read_text()
+        pocket = self.env.from_string(template).render(**self.context("pocket4"))
+        ideapad = self.env.from_string(template).render(**self.context("ideapad"))
+
+        self.assertIn('fingers = 3, direction = "up"', pocket)
+        self.assertIn('fingers = 4, direction = "up"', pocket)
+        self.assertNotIn('direction = "up"', ideapad)
+
     def test_profile_specific_sources_do_not_install_on_ideapad(self) -> None:
         pocket_files = [path for path in (ROOT / "home").glob("**/*") if path.is_file() and (path.name.startswith("pocket4-") or path.name in {"config-narrow.jsonc.jinja", "style-compact.css", "pocket4.zsh"})]
         self.assertGreaterEqual(len(pocket_files), 10)

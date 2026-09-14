@@ -6,8 +6,8 @@ A myarch change is incomplete if it regresses any item below.
 |---|---|
 | Sesh/SST | `sst`, mycockpit, tickets, tmux keyboard/mouse/clipboard, cross-machine sessions |
 | Workspaces | 1–15 banks, role mapping, persistent slots, chooser, app pins, scratchpad, `hypr-load-main` |
-| Overview | Super+G and three-finger-up open Hyprexpo with real workspace IDs |
-| IdeaPad gestures | Native three-finger horizontal workspace movement and up overview |
+| Overview | Super+G opens Hyprexpo with real workspace IDs; Pocket also exposes it through three-finger-up on the touchscreen |
+| IdeaPad gestures | Native three-finger horizontal workspace movement; upward trackpad swipe remains unbound |
 | Pocket gestures | Hyprgrass three-finger horizontal/up and four-finger OSK |
 | Pocket display/touch | Rotation always changes panel and touchscreen together; orientation, flip, and scale remain explicit |
 | Pocket tablet mode | Manual 1.6↔2.0 toggle; exiting hides OSK; no fabricated auto-detection |

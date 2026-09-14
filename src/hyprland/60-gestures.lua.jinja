@@ -2,8 +2,9 @@
 ---- GESTURES ----
 ------------------
 
--- Three-finger swipes, mirroring the mac trackpad Spaces gestures: left/right
--- walks the workspace row, up opens the overview (≙ Mission Control).
+-- Three-finger horizontal swipes mirror the mac trackpad Spaces gesture.
+-- Pocket additionally maps a touchscreen swipe up to the overview (≙ Mission
+-- Control); upward trackpad swipes on IdeaPad are deliberately left unbound.
 --
 -- THE GESTURE SOURCE IS PER-MACHINE, and the hardware forces that, not taste.
 -- Hyprland's own gesture system is fed exclusively by libinput POINTER gesture
@@ -140,11 +141,7 @@ if hl.plugin.hyprgrass ~= nil then
     })
 end
 {% else %}
--- Trackpad gestures (native libinput pointer gestures).
+-- Trackpad gestures (native libinput pointer gestures). Upward swipes stay
+-- unbound; the overview remains available through Super+G.
 hl.gesture({ fingers = 3, direction = "horizontal", action = "workspace" })
-hl.gesture({
-    fingers   = 3,
-    direction = "up",
-    action    = function() hl.plugin.hyprexpo.expo("toggle") end,
-})
 {% endif %}

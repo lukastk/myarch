@@ -197,10 +197,11 @@ hl.bind(mainMod .. " + SHIFT + W",   hl.dsp.exec_cmd("~/.mybin/hypr-ws-chooser -
 
 -- Overview (hyprexpo) — the same "pick a space" job as the wofi chooser above,
 -- but visual: a 3x3 grid of live workspace previews, click or tap to select.
--- The keyboard twin of the three-finger-up gesture (see GESTURES), and the
--- only way to reach the overview on a machine whose gesture source is broken
--- or whose plugin failed to build. G as in grid, and the key hyprexpo's own
--- docs use. Escape cancels (plugin `cancel_key`).
+-- On Pocket this is also the keyboard twin of the touchscreen's
+-- three-finger-up gesture (see GESTURES). On IdeaPad it is the sole overview
+-- entry point because upward trackpad swipes are intentionally unbound.
+-- G as in grid, and the key hyprexpo's own docs use. Escape cancels (plugin
+-- `cancel_key`).
 -- Kept ALONGSIDE the wofi chooser rather than replacing it: the chooser also
 -- does --move (send window to workspace), which the overview does not.
 hl.bind(mainMod .. " + G", function()
