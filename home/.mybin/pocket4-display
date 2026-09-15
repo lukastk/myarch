@@ -52,8 +52,8 @@ restart_waybar() {
 
 # Poll until the panel reports scale $1 and transform $2, or fail loudly.
 wait_for_panel() {
-    local s="$1" t="$2" i
-    for i in $(seq 20); do
+    local s="$1" t="$2"
+    for _ in $(seq 20); do
         if hyprctl monitors -j | jq -e --arg mon "$MON" --argjson s "$s" --argjson t "$t" \
             '.[] | select(.name == $mon) | ((.scale - $s) * (.scale - $s) < 0.0001) and (.transform == $t)' >/dev/null; then
             return 0
