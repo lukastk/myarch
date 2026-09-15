@@ -1,0 +1,49 @@
+/* pocket4 — compact ONE-ROW layout for LANDSCAPE tablet mode.
+
+   At scale 2.0 the panel is 1280x800 logical pixels. The normal one-row layout
+   needs about 1520px, so this layout uses compact metrics and keeps the controls
+   that benefit most from immediate touch access. The omitted direct buttons are
+   still available through the Arch menu:
+
+     applications              Arch menu -> Applications
+     rotate                    Arch menu -> Displays
+     thermal / power mode      Arch menu -> Power
+     network                   Arch menu -> Network
+
+   Dictation is kept on the left and the workspace strip stays fixed in the
+   centre, so recording-state controls can appear without moving the workspace
+   targets under a finger. */
+{
+  "name": "tablet-landscape",
+  "layer": "top",
+  "position": "top",
+  "autohide": false,
+  "autohide-blocked": false,
+  "exclusive": true,
+  "passthrough": false,
+  "gtk-layer-shell": true,
+  "modules-left": [
+    "custom/archicon",
+    "clock",
+    "group/sysinfo",
+    "custom/voxtype-start",
+    "custom/voxtype",
+    "custom/voxtype-cleanup",
+    "custom/voxtype-cancel",
+    "custom/recording"
+  ],
+  "modules-center": [
+    "group/workspaces"
+  ],
+  "modules-right": [
+    "custom/tabletmode",
+    "custom/osk",
+    "group/display",
+    "idle_inhibitor",
+    "group/brightness",
+    "group/volume",
+    "hyprland/language",
+    "group/tray"
+  ],
+  "include": ["{{ home }}/.config/waybar/modules.jsonc"]
+}

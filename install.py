@@ -170,7 +170,7 @@ def selected_home_sources(profile_name: str) -> list[Path]:
         if profile_name != "pocket4":
             if path.name.startswith("pocket4-") or rel == Path(".config/myarch/shell/pocket4.zsh"):
                 continue
-            if rel in {Path(".config/waybar/config-narrow.jsonc.jinja"), Path(".config/waybar/style-compact.css")}:
+            if rel in {Path(".config/waybar/config-narrow.jsonc.jinja"), Path(".config/waybar/config-tablet-landscape.jsonc.jinja"), Path(".config/waybar/style-compact.css")}:
                 continue
         sources.append(path)
     return sources

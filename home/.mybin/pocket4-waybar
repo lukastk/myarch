@@ -1,18 +1,20 @@
 #!/bin/bash
 # pocket4-waybar — start waybar with the layout that FITS the current screen.
 #
-# pocket4 has two waybar layouts: a single row (config.jsonc) and two stacked
-# rows (config-narrow.jsonc). Which one is right is a question about the logical
-# WIDTH available, and two independent things set that — the orientation and the
-# tablet-mode scale:
+# pocket4 has three waybar layouts: a full single row (config.jsonc), a compact
+# single row for landscape tablet mode (config-tablet-landscape.jsonc), and two
+# stacked rows (config-narrow.jsonc). The choice is primarily about logical width,
+# with the compact single row restricted to landscape because the 1000/800-wide
+# portrait states cannot carry the same controls safely:
 #
 #     portrait  1600 physical / 1.6 = 1000 logical   / 2.0 =  800
 #     landscape 2560 physical / 1.6 = 1600 logical   / 2.0 = 1280
 #
-# The one-row bar lays out at ~1520 logical px, so it fits ONLY the top-left
-# cell: landscape at desktop scale. Everything else needs two rows. That is the
-# whole rule, and `layout_for` below is the single place it is written down —
-# pocket4-display asks this script rather than repeating it.
+# The full one-row bar needs ~1520 logical px. The landscape-tablet layout fits
+# 1280 by using physically equivalent compact metrics and moving secondary actions
+# behind the existing Arch menu. Everything narrower keeps the two-row layout.
+# `layout_for` below is the single place this is written down — pocket4-display
+# asks this script rather than repeating it.
 #
 # It used to key off orientation alone, which left tablet-mode LANDSCAPE on the
 # one-row layout at 1280px: ~240px of right-hand modules sat past the edge of the
@@ -29,12 +31,16 @@
 set -euo pipefail
 
 CONF_WIDE="$HOME/.config/waybar/config.jsonc"
+CONF_TABLET_LANDSCAPE="$HOME/.config/waybar/config-tablet-landscape.jsonc"
 CONF_NARROW="$HOME/.config/waybar/config-narrow.jsonc"
 STYLE_DEFAULT="$HOME/.config/waybar/style.css"
 STYLE_COMPACT="$HOME/.config/waybar/style-compact.css"
 
-# The one-row bar lays out at ~1520 logical px, so it needs a full-width screen.
+# The full one-row bar lays out at ~1520 logical px, so it needs a full-width screen.
 ONE_ROW_MIN_WIDTH=1600
+# Landscape tablet mode has 1280 logical px. Its dedicated one-row layout is
+# intentionally not used below this threshold or in portrait.
+TABLET_LANDSCAPE_ONE_ROW_MIN_WIDTH=1200
 # The two-row bar's rows measure up to 879 logical px at the default metrics
 # (row 2 while dictation is recording). Below roughly that, the rows no longer
 # fit and the bar needs style-compact.css as well — see its header.
@@ -57,10 +63,12 @@ logical_width_for() {
 # the orientation and the tablet-mode scale — never by either one alone. Prints
 # "<config> <style>".
 layout_for() {
-    local width
-    width="$(logical_width_for "$1")"
+    local transform="$1" width
+    width="$(logical_width_for "$transform")"
     if [ "$width" -ge "$ONE_ROW_MIN_WIDTH" ]; then
         printf '%s %s\n' "$CONF_WIDE" "$STYLE_DEFAULT"
+    elif [ $(( transform % 2 )) -eq 1 ] && [ "$width" -ge "$TABLET_LANDSCAPE_ONE_ROW_MIN_WIDTH" ]; then
+        printf '%s %s\n' "$CONF_TABLET_LANDSCAPE" "$STYLE_COMPACT"
     elif [ "$width" -lt "$COMPACT_BELOW_WIDTH" ]; then
         printf '%s %s\n' "$CONF_NARROW" "$STYLE_COMPACT"
     else

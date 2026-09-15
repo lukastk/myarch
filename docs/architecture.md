@@ -25,7 +25,7 @@ Static files under `home/` become symlinks into the repository. `.jinja` files a
 
 ## Profiles
 
-Profiles are explicit TOML contracts. `pocket4` selects Foot, battery `BATT`, touchscreen/Hyprgrass, narrow bar files, Pocket scripts, and the Pocket dictation capture level. `ideapad` selects Kitty, battery `BAT1`, native gestures, and excludes all Pocket-only files.
+Profiles are explicit TOML contracts. `pocket4` selects Foot, battery `BATT`, touchscreen/Hyprgrass, landscape-tablet and narrow bar files, Pocket scripts, and the Pocket dictation capture level. `ideapad` selects Kitty, battery `BAT1`, native gestures, and excludes all Pocket-only files.
 
 A profile is never inferred from hostname or hardware. This keeps a wrong install loud and reviewable.
 

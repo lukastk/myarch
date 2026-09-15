@@ -13,7 +13,7 @@ A myarch change is incomplete if it regresses any item below.
 | Pocket tablet mode | Manual 1.6↔2.0 toggle; exiting hides OSK; Brave gets touch-pointer launch flags (next launch); Obsidian switches live via mysystem watching `desktop-mode`; no fabricated auto-detection |
 | Pocket OSK | Running equals visible; CLI/bar/gesture toggle; portrait and landscape dimensions |
 | Pocket thermals | quiet/chill/balanced/performance coordinate power limits and fan curve through `pocket4-mode` |
-| Pocket bar | Correct one/two-row layout and hit mapping at logical widths 1600/1280/1000/800 |
+| Pocket bar | Full one-row at 1600, compact landscape-tablet one-row at 1280, two-row at 1000/800; correct hit mapping in every state |
 | Dictation | Hold/latch, cleanup promotion, cancel, touch finish/start, local backend, Pocket mic correction |
 | Terminal | Foot touch-to-TUI on Pocket; Kitty keyboard protocol through tmux; Obsidian URLs |
 | Displays | extend/external/internal/mirror, mirror overlay restore, workspace restoration, external-only gaming |

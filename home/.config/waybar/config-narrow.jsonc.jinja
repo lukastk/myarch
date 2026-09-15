@@ -1,10 +1,10 @@
 /* pocket4 — TWO-ROW waybar layout for a NARROW screen.
 
-   Used whenever one row does not fit: portrait (either scale), and tablet mode
-   in EITHER orientation. pocket4-waybar owns that rule; see its `layout_for`.
-   The file used to be config-portrait.jsonc, chosen on orientation alone —
-   tablet-mode landscape kept the one-row layout and lost ~240px of right-hand
-   modules off the edge of the screen.
+   Used for portrait at either desktop or tablet scale and for any landscape state
+   too narrow for the compact one-row layout. pocket4-waybar owns that rule; see
+   its `layout_for`. The file used to be config-portrait.jsonc, chosen on
+   orientation alone; it later also covered landscape tablet mode until that
+   state gained a dedicated compact one-row layout.
 
    Waybar renders a TOP-LEVEL ARRAY as multiple bars, so this file is an array
    of two bar objects rather than one object. Both include the shared module

@@ -79,11 +79,11 @@ set_scale() {
     # The restart must come AFTER the hyprctl above, not before: pocket4-waybar
     # sizes the bar from the scale the monitor is reporting when it starts.
     #
-    # 2026-08-15: tablet mode used to keep the ONE-row layout, and at 1280 logical
-    # px ~240px of it sat off the edge of the panel. The comment that used to live
-    # here recorded that overflow as a deliberately accepted tradeoff — "DO NOT
-    # fix this again without asking" — and Lukas has since asked for exactly that
-    # fix, so the two-row layout now covers tablet mode in both orientations.
+    # 2026-08-15: tablet mode used to keep the FULL one-row layout, and at 1280
+    # logical px ~240px of it sat off the edge of the panel. It first moved to
+    # the two-row narrow layout. Landscape tablet mode now has its own compact
+    # one-row layout, which fits by keeping secondary actions in the Arch menu;
+    # portrait tablet mode remains two rows at 800 logical px.
     #
     # ABSOLUTE INSTALLED path, per the note below on sibling scripts.
     "$HOME/.mybin/restart-bar"

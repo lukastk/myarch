@@ -93,9 +93,11 @@ class RenderTests(unittest.TestCase):
                 with self.subTest(profile=profile, path=name):
                     json.loads(strip_jsonc(rendered))
             if profile == "pocket4":
-                path = ROOT / "home/.config/waybar/config-narrow.jsonc.jinja"
-                rendered = self.env.from_string(path.read_text()).render(**context)
-                json.loads(strip_jsonc(rendered))
+                for name in ("config-narrow.jsonc.jinja", "config-tablet-landscape.jsonc.jinja"):
+                    path = ROOT / "home/.config/waybar" / name
+                    rendered = self.env.from_string(path.read_text()).render(**context)
+                    with self.subTest(profile=profile, path=name):
+                        json.loads(strip_jsonc(rendered))
 
     def test_fuzzel_ini_renders_as_a_parseable_config(self) -> None:
         source = ROOT / "home/.config/fuzzel/fuzzel.ini.jinja"
@@ -225,7 +227,7 @@ class RenderTests(unittest.TestCase):
         self.assertNotIn('direction = "up"', ideapad)
 
     def test_profile_specific_sources_do_not_install_on_ideapad(self) -> None:
-        pocket_files = [path for path in (ROOT / "home").glob("**/*") if path.is_file() and (path.name.startswith("pocket4-") or path.name in {"config-narrow.jsonc.jinja", "style-compact.css", "pocket4.zsh"})]
+        pocket_files = [path for path in (ROOT / "home").glob("**/*") if path.is_file() and (path.name.startswith("pocket4-") or path.name in {"config-narrow.jsonc.jinja", "config-tablet-landscape.jsonc.jinja", "style-compact.css", "pocket4.zsh"})]
         self.assertGreaterEqual(len(pocket_files), 10)
 
     def test_waybar_restart_has_one_serialized_authority(self) -> None:

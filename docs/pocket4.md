@@ -7,11 +7,11 @@ The GPD Pocket 4 panel is physically portrait (`1600×2560`) and mounted sideway
 | State | Physical | Scale | Transform | Logical | Bar |
 |---|---:|---:|---:|---:|---|
 | Landscape desktop | 2560×1600 | 1.6 | 3 | 1600×1000 | one row, normal metrics |
-| Landscape tablet | 2560×1600 | 2.0 | 3 | 1280×800 | two rows, normal metrics |
+| Landscape tablet | 2560×1600 | 2.0 | 3 | 1280×800 | one row, compact metrics |
 | Portrait desktop | 1600×2560 | 1.6 | 0 | 1000×1600 | two rows, normal metrics |
 | Portrait tablet | 1600×2560 | 2.0 | 0 | 800×1280 | two rows, compact metrics |
 
-`pocket4-waybar` derives the layout from logical width, not orientation alone. A row whose minimum width exceeds its layer surface is a correctness failure: Hyprland scales the oversized buffer and visible touch targets no longer correspond to actual hit regions.
+`pocket4-waybar` chooses among a full-width one-row layout, a compact landscape-tablet one-row layout, and a narrow two-row layout. Logical width remains the hard fit constraint, while the compact 1280 layout is restricted to landscape because the 1000/800-wide portrait states cannot carry the same controls safely. A row whose minimum width exceeds its layer surface is a correctness failure: Hyprland scales the oversized buffer and visible touch targets no longer correspond to actual hit regions. The 1280 layout keeps workspaces, dictation, tablet/OSK, display, idle, brightness/volume, language, and tray controls visible; applications, rotation, thermal mode, and network remain available through the Arch menu.
 
 `restart-bar` serializes every Waybar stop/start and waits for exactly one committed layer surface. Rotation passes its target layout through that authority; scale changes use the same path. This prevents rapid orientation and tablet-mode changes from creating duplicate bars during the UWSM launch window.
 
@@ -43,4 +43,4 @@ For any Pocket UI/display change:
 9. Test dictation hold, latch, cleanup, cancel, and touch finish.
 10. Restore landscape desktop state.
 
-The compact 800-logical-pixel metrics remain physically touch-safe because scale 2.0 turns their smaller logical dimensions into equal-or-larger glass dimensions than normal metrics at scale 1.6.
+The compact 1280- and 800-logical-pixel metrics remain physically touch-safe because scale 2.0 turns their smaller logical dimensions into equal-or-larger glass dimensions than normal metrics at scale 1.6.

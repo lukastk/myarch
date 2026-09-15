@@ -2,7 +2,7 @@
 
 myarch is a reproducible, keyboard-first Arch Linux desktop built on Hyprland. It is the standalone desktop layer for two profiles:
 
-- `pocket4` — GPD Pocket 4, including transformed high-DPI display, touchscreen gestures, tablet scaling, on-screen keyboard, adaptive one/two-row bars, and thermal controls.
+- `pocket4` — GPD Pocket 4, including transformed high-DPI display, touchscreen gestures, tablet scaling, on-screen keyboard, adaptive full/compact one-row and narrow two-row bars, and thermal controls.
 - `ideapad` — Lenovo IdeaPad Slim 5, including native trackpad gestures and the same workspace/desktop model; deployed after Pocket 4 validation on 2026-08-21.
 
 myarch began as an extraction of the Hyprland target from [`myrig`](https://github.com/lukastk/myrig). Its visual system is inspired by Omarchy's restrained, flat desktop design, while preserving the deeper machine-specific behavior already proven on the Pocket 4.
@@ -22,7 +22,7 @@ myarch began as an extraction of the Hyprland target from [`myrig`](https://gith
 - 15-workspace model, role workspaces, scratchpad, workspace chooser, and Hyprexpo overview
 - Hyprexpo on both profiles; Hyprgrass touchscreen gestures on Pocket 4
 - Omarchy-inspired minimalist Waybar with a collapsed tray and state-driven indicators
-- Four Pocket bar states: 1600/1280/1000/800 logical pixels, with one/two-row and compact layouts
+- Four Pocket display states at 1600/1280/1000/800 logical pixels: full-width and compact landscape one-row layouts, plus normal and compact portrait two-row layouts
 - Pocket display rotation coupled to touchscreen transform, explicit tablet scaling, OSK, gaps, and thermal controls
 - Voxtype-powered local Parakeet dictation with preserved hold/latch/cleanup shortcuts and touch controls
 - Display layouts, sub-backlight gamma dimming, wallpaper rotation/pinning, idle inhibition, lock/idle policy, and graphical-session environment repair

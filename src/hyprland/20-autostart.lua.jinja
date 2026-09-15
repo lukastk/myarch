@@ -13,9 +13,9 @@ hl.on("hyprland.start", function()
     -- warnings and errors notify regardless of the flag.
     hl.exec_cmd("hyprpm reload -n")
 {% if 'pocket4' in targets %}
-    -- pocket4-waybar picks the single-row or two-row layout from the CURRENT
-    -- monitor transform. Starting plain `waybar` would always load the
-    -- landscape config, even when the session begins in portrait.
+    -- pocket4-waybar picks the full-width, compact landscape-tablet, or narrow
+    -- layout from the current monitor geometry. Starting plain `waybar` would
+    -- always load the full-width config, even in tablet or portrait states.
     hl.exec_cmd("uwsm app -- {{ home }}/.mybin/pocket4-waybar")
     -- Refreshes the custom workspace buttons on Hyprland events (they are
     -- signal-driven rather than polled — see pocket4-ws-watch).

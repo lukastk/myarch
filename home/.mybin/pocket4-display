@@ -85,10 +85,10 @@ apply() {
     # landscape (or within portrait) keeps both the layout AND the logical width,
     # so restarting there would just be a visible flicker for nothing.
     #
-    # Note the class change is the trigger even when it does not change which
-    # CONFIG is used (in tablet mode both orientations are two-row): the bar must
-    # still be rebuilt, because rotating changes the logical width — 800 to 1280
-    # — and waybar does not reflow to a new size on its own.
+    # An orientation-class change always rebuilds the bar. In tablet mode it also
+    # switches between the 800px portrait two-row config and the 1280px landscape
+    # compact one-row config; at other scales the config can stay the same, but
+    # Waybar still cannot reflow itself to the new logical width.
     local now_landscape=1
     [ $(( t % 2 )) -eq 1 ] || now_landscape=0
     if [ "$was_landscape" != "$now_landscape" ]; then
