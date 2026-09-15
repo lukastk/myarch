@@ -1,0 +1,51 @@
+# fuzzel — the application launcher (Super+ALT+SPACE) and the dmenu-style
+# picker behind every `myarch menu` surface, the workspace choosers, the
+# clipboard history and the keyboard-backlight picker.
+#
+# WHY fuzzel AND NOT wofi: wofi is GTK3, and toolkit initialisation put roughly
+# 110 ms between the keypress and the moment the surface would accept input.
+# Keys pressed inside that window went to the previously focused window and
+# were lost, so "Super+R, Enter" silently did nothing. fuzzel draws on Wayland
+# directly with no toolkit and accepts input at ~20 ms — shorter than the time
+# it takes to press a second key, so the race is gone. Measured on pocket4
+# 2026-09-15 by injecting a keystroke at a fixed delay and checking whether it
+# registered; see docs/architecture.md.
+#
+# COMMENTS MUST USE `#`. fuzzel's ini parser rejects `;` with a syntax error,
+# which is why install.py's comment_prefix() special-cases this directory the
+# same way it does foot's.
+#
+# The layer-shell namespace is fuzzel's default, "launcher" — that is the name
+# a Hyprland layerrule or a screencast exclusion has to match.
+
+font=IoskeleyMonoTerm Nerd Font Mono:size=11
+
+# Terminal used to start desktop entries declaring Terminal=true. It comes from
+# the profile because pocket4 runs foot and ideapad runs kitty; `-e` is real on
+# kitty and a documented no-op on foot, so one spelling covers both.
+terminal={{ profile.terminal }} -e
+
+# Width is in CHARACTERS, capped so the surface still fits pocket4's narrowest
+# logical width (800 — portrait at scale 2.0): 72 characters plus the default
+# 40px horizontal padding stays inside 800 logical px. The widest picker
+# content is the keybinding catalogue at 90 characters; its two longest lines
+# truncate rather than pushing the surface off-screen.
+width=72
+
+[colors]
+background={{ theme.background[1:] }}ff
+text={{ theme.foreground[1:] }}ff
+prompt={{ theme.accent[1:] }}ff
+placeholder={{ theme.muted[1:] }}ff
+input={{ theme.foreground[1:] }}ff
+match={{ theme.accent_alt[1:] }}ff
+selection={{ theme.surface_hover[1:] }}ff
+selection-text={{ theme.foreground[1:] }}ff
+selection-match={{ theme.accent_alt[1:] }}ff
+counter={{ theme.muted[1:] }}ff
+border={{ theme.accent[1:] }}ff
+
+[border]
+# Matches mako's notification frame, so the two transient surfaces agree.
+width=2
+radius=8

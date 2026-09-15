@@ -129,10 +129,10 @@ def pocket4_message() -> str:
 
 
 def choose(prompt: str, rows: list[tuple[str, str]]) -> str | None:
-    if shutil.which("wofi") is None:
-        raise RuntimeError("wofi is required for the keyboard-backlight picker")
+    if shutil.which("fuzzel") is None:
+        raise RuntimeError("fuzzel is required for the keyboard-backlight picker")
     result = subprocess.run(
-        ["wofi", "--dmenu", "--prompt", prompt, "--insensitive", "--cache-file", "/dev/null"],
+        ["fuzzel", "--dmenu", "--prompt", f"{prompt} "],
         input="\n".join(f"{label}\t{value}" for label, value in rows) + "\n",
         text=True,
         capture_output=True,
@@ -145,7 +145,7 @@ def choose(prompt: str, rows: list[tuple[str, str]]) -> str | None:
     try:
         return answer.rsplit("\t", 1)[1]
     except IndexError as error:
-        raise RuntimeError(f"wofi returned a malformed selection: {answer!r}") from error
+        raise RuntimeError(f"fuzzel returned a malformed selection: {answer!r}") from error
 
 
 def notify(title: str, body: str) -> None:

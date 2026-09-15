@@ -35,8 +35,11 @@ def state() -> dict:
 
 
 def select(prompt: str, labels: list[str]) -> str | None:
+    # fuzzel matches case-insensitively and keeps no dmenu cache unless --cache
+    # is passed, so wofi's --insensitive and --cache-file /dev/null have no
+    # translation: the given order survives and past picks do not reorder it.
     result = subprocess.run(
-        ["wofi", "--dmenu", "--prompt", prompt, "--insensitive", "--cache-file", "/dev/null"],
+        ["fuzzel", "--dmenu", "--prompt", f"{prompt} "],
         input="\n".join(labels) + "\n", text=True, capture_output=True,
     )
     if result.returncode != 0:
@@ -54,7 +57,7 @@ def terminal_argv(command: list[str], title: str) -> list[str]:
 
 def command_menu() -> None:
     entries = {
-        " Applications": lambda: detach(["wofi", "--show", "drun"]),
+        " Applications": lambda: detach(["fuzzel"]),
         "󰆍 Sesh threads (sst)": lambda: detach(terminal_argv(["sesh", "tui"], "Sesh")),
         "󰌌 Keybindings": keys,
         "󰏘 Themes": theme_pick,
@@ -323,7 +326,7 @@ def capture_menu() -> None:
 
 def doctor() -> None:
     checks = [
-        "hyprctl", "waybar", "wofi", "grim", "slurp", "hyprpicker",
+        "hyprctl", "waybar", "fuzzel", "grim", "slurp", "hyprpicker",
         "wl-copy", "cliphist", "mako", "flock", "sesh", "voxtype",
     ]
     failed = False

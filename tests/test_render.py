@@ -97,6 +97,39 @@ class RenderTests(unittest.TestCase):
                 rendered = self.env.from_string(path.read_text()).render(**context)
                 json.loads(strip_jsonc(rendered))
 
+    def test_fuzzel_ini_renders_as_a_parseable_config(self) -> None:
+        source = ROOT / "home/.config/fuzzel/fuzzel.ini.jinja"
+        installer = runpy.run_path((ROOT / "install.py").as_posix(), run_name="__not_main__")
+        # fuzzel's ini parser rejects `;` comments with a hard syntax error, which
+        # would take the whole launcher config down. The installer must stamp this
+        # file with `#`, the way it already does for foot.
+        self.assertEqual("#", installer["comment_prefix"](source))
+        for profile in ("pocket4", "ideapad"):
+            for theme in sorted(path.stem for path in (ROOT / "themes").glob("*.toml")):
+                context = self.context(profile, theme)
+                rendered = installer["add_disclaimer"](
+                    source, self.env.from_string(source.read_text()).render(**context)
+                )
+                with self.subTest(profile=profile, theme=theme):
+                    section = None
+                    colours = 0
+                    for line in rendered.splitlines():
+                        line = line.strip()
+                        if not line or line.startswith("#"):
+                            continue
+                        if line.startswith("[") and line.endswith("]"):
+                            section = line[1:-1]
+                            continue
+                        self.assertIn("=", line)
+                        key, value = line.split("=", 1)
+                        self.assertRegex(key, r"^[a-z0-9-]+$")
+                        if section == "colors":
+                            # fuzzel takes RGBA as 8 hex digits and no leading '#'.
+                            self.assertRegex(value, r"^[0-9a-f]{8}$")
+                            colours += 1
+                    self.assertEqual(11, colours)
+                    self.assertIn(f"terminal={context['profile']['terminal']} -e", rendered)
+
     def test_hyprland_fragments_are_ordered_and_complete(self) -> None:
         fragments = sorted((ROOT / "src/hyprland").glob("*.lua.jinja"))
         self.assertEqual(10, len(fragments))

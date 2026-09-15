@@ -96,7 +96,15 @@ hl.animation({ leaf = "fadeIn",        enabled = true, speed = 1.73, bezier = "a
 hl.animation({ leaf = "fadeOut",       enabled = true, speed = 1.46, bezier = "almostLinear" })
 hl.animation({ leaf = "fade",          enabled = true, speed = 3.03, bezier = "quick" })
 hl.animation({ leaf = "layers",        enabled = true, speed = 3.81, bezier = "easeOutQuint" })
-hl.animation({ leaf = "layersIn",      enabled = true, speed = 4,    bezier = "easeOutQuint", style = "fade" })
+-- layersIn is deliberately far quicker than the rest of this preset. Every
+-- layer surface fades in with it — the launcher, mako notifications, waybar —
+-- and at the preset's 4 (400ms) the launcher was fully interactive roughly
+-- 300ms before it finished appearing, which read as lag that was not there.
+-- 1.2 (120ms) tracks how fast fuzzel actually becomes usable (~20ms) without
+-- popping. Hyprland speeds are deciseconds. NOTE a layerrule can scope an
+-- animation STYLE to one namespace but not a speed, so this is necessarily
+-- global to all layer surfaces.
+hl.animation({ leaf = "layersIn",      enabled = true, speed = 1.2,  bezier = "easeOutQuint", style = "fade" })
 hl.animation({ leaf = "layersOut",     enabled = true, speed = 1.5,  bezier = "linear",       style = "fade" })
 hl.animation({ leaf = "fadeLayersIn",  enabled = true, speed = 1.79, bezier = "almostLinear" })
 hl.animation({ leaf = "fadeLayersOut", enabled = true, speed = 1.39, bezier = "almostLinear" })

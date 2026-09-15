@@ -52,7 +52,7 @@ if [[ $config_only == false ]]; then
     # plugin step and the autostart's `hyprpm reload` both need it.
     hyprpm
     xdg-desktop-portal-hyprland xdg-desktop-portal-gtk
-    waybar wofi mako libnotify
+    waybar fuzzel mako libnotify
     grim slurp hyprpicker cliphist wl-clipboard
     tesseract tesseract-data-eng zbar gpu-screen-recorder ffmpeg ffmpegthumbnailer
     brightnessctl hyprsunset playerctl pavucontrol pipewire-alsa

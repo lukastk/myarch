@@ -141,7 +141,9 @@ def comment_prefix(path: Path) -> str | None:
         return "//"
     if name.endswith(".lua"):
         return "--"
-    if name.endswith(".ini") and "foot" not in path.parts:
+    # foot and fuzzel both read .ini files whose parsers accept `#` and reject
+    # `;` — fuzzel fails the whole config with a syntax error on a `;` line.
+    if name.endswith(".ini") and not {"foot", "fuzzel"} & set(path.parts):
         return ";"
     return "#"
 

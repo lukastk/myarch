@@ -1,5 +1,5 @@
 #!/bin/bash
-# hypr-ws-chooser [--move] — wofi picker over the named workspaces, the
+# hypr-ws-chooser [--move] — fuzzel picker over the named workspaces, the
 # Hyprland twin of the macbook Hammerspoon grid choosers (ctrl+alt+r goto,
 # ctrl+alt+s move-window). Workspace names mirror row 1 of the spacework
 # grid (home/.config/spacework/stacks/main.toml).
@@ -16,9 +16,11 @@ if [[ $move == 1 ]]; then
   prompt="Move window to workspace"
 fi
 
-# Cancelling wofi exits non-zero → set -e ends the script silently (no-op).
-# --cache-file /dev/null: wofi's dmenu frecency cache would reorder the list
-# by past picks, breaking the numeric workspace order.
+# Cancelling fuzzel exits non-zero → set -e ends the script silently (no-op).
+# The numeric order has to survive into the list. wofi needed
+# --cache-file /dev/null to stop its dmenu frecency cache reordering by past
+# picks; fuzzel keeps no dmenu cache unless --cache is passed, so the guard is
+# gone rather than translated.
 choice=$(printf '%s\n' \
   "1" \
   "2 Obsidian" \
@@ -31,7 +33,7 @@ choice=$(printf '%s\n' \
   "9 Calendar" \
   "10 Anki" \
   "11" "12" "13" "14" "15" \
-  | wofi --dmenu --cache-file /dev/null --prompt "$prompt")
+  | fuzzel --dmenu --prompt "$prompt ")
 
 ws=${choice%% *}
 [[ -n "$ws" ]] || exit 0

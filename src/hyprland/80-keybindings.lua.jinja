@@ -13,7 +13,7 @@ hl.bind(mainMod .. " + Return", hl.dsp.exec_cmd(terminal))
 hl.bind(mainMod .. " + T",      hl.dsp.exec_cmd(terminal, { float = true, size = "60% 60%", center = true }))
 hl.bind(mainMod .. " + E",      hl.dsp.exec_cmd(fileManager))
 hl.bind(mainMod .. " + R",      hl.dsp.exec_cmd(menu))
-hl.bind(mainMod .. " + ALT + SPACE", hl.dsp.exec_cmd("wofi --show drun"))
+hl.bind(mainMod .. " + ALT + SPACE", hl.dsp.exec_cmd("fuzzel"))
 hl.bind(mainMod .. " + C",      hl.dsp.window.close())
 hl.bind(mainMod .. " + M",      hl.dsp.exec_cmd("uwsm stop"))
 
@@ -54,7 +54,7 @@ hl.bind(mainMod .. " + CTRL + P", hl.dsp.exec_cmd(
 
 -- Launcher that drops the chosen app into the scratchpad (≙ Super+R, then
 -- Super+ALT+S to stash it, then Super+S to reveal it).
--- wofi is a layer-shell surface rather than a window, so it raises no
+-- fuzzel is a layer-shell surface rather than a window, so it raises no
 -- window.open of its own — the next window.open after the launcher is the app
 -- it started.
 --
@@ -191,18 +191,18 @@ hl.bind(mainMod .. " + period",         hl.dsp.focus({ workspace = "e+1" }))
 hl.bind(mainMod .. " + SHIFT + comma",  hl.dsp.window.move({ workspace = "e-1" }))
 hl.bind(mainMod .. " + SHIFT + period", hl.dsp.window.move({ workspace = "e+1" }))
 
--- Workspace choosers (wofi; covers 11–15 and the named overview)
+-- Workspace choosers (fuzzel; covers 11–15 and the named overview)
 hl.bind(mainMod .. " + W",           hl.dsp.exec_cmd("~/.mybin/hypr-ws-chooser"))
 hl.bind(mainMod .. " + SHIFT + W",   hl.dsp.exec_cmd("~/.mybin/hypr-ws-chooser --move"))
 
--- Overview (hyprexpo) — the same "pick a space" job as the wofi chooser above,
+-- Overview (hyprexpo) — the same "pick a space" job as the fuzzel chooser above,
 -- but visual: a 3x3 grid of live workspace previews, click or tap to select.
 -- On Pocket this is also the keyboard twin of the touchscreen's
 -- three-finger-up gesture (see GESTURES). On IdeaPad it is the sole overview
 -- entry point because upward trackpad swipes are intentionally unbound.
 -- G as in grid, and the key hyprexpo's own docs use. Escape cancels (plugin
 -- `cancel_key`).
--- Kept ALONGSIDE the wofi chooser rather than replacing it: the chooser also
+-- Kept ALONGSIDE the fuzzel chooser rather than replacing it: the chooser also
 -- does --move (send window to workspace), which the overview does not.
 hl.bind(mainMod .. " + G", function()
     if hl.plugin.hyprexpo ~= nil then
@@ -243,10 +243,12 @@ hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true })
 hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
 
 -- --- Utilities ---
--- Clipboard history picker (≙ Maccy). --cache-file /dev/null: wofi's dmenu
--- frecency cache would reorder entries by past picks, breaking cliphist's
--- newest-first order.
-hl.bind(mainMod .. " + V", hl.dsp.exec_cmd("cliphist list | wofi --dmenu --cache-file /dev/null | cliphist decode | wl-copy"))
+-- Clipboard history picker (≙ Maccy). cliphist's order is newest-first and
+-- must survive into the list. wofi needed --cache-file /dev/null here to stop
+-- its dmenu frecency cache reordering entries by past picks; fuzzel keeps no
+-- cache in dmenu mode unless --cache is passed, so the guard is gone rather
+-- than translated.
+hl.bind(mainMod .. " + V", hl.dsp.exec_cmd("cliphist list | fuzzel --dmenu | cliphist decode | wl-copy"))
 
 -- myarch capture workflows: save+clipboard, frozen region selection, OCR/QR,
 -- colour picking, and recording are all available from the capture menu.
