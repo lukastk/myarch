@@ -129,6 +129,10 @@ class RenderTests(unittest.TestCase):
                             colours += 1
                     self.assertEqual(11, colours)
                     self.assertIn(f"terminal={context['profile']['terminal']} -e", rendered)
+                    # Touch dismissal: fuzzel's default `exclusive` focus locks
+                    # keyboard focus to itself, so nothing outside can take it and
+                    # a launcher opened by touch cannot be closed by touch.
+                    self.assertIn("keyboard-focus=on-demand", rendered)
 
     def test_hyprland_fragments_are_ordered_and_complete(self) -> None:
         fragments = sorted((ROOT / "src/hyprland").glob("*.lua.jinja"))

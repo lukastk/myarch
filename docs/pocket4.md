@@ -24,6 +24,7 @@ The GPD Pocket 4 panel is physically portrait (`1600×2560`) and mounted sideway
 - `keyboard-backlight` — discovers and controls standard Linux `*:kbd_backlight` LED devices on machines that expose one. The Pocket 4 does not: its HAILUCK keyboard MCU owns the light, does not publish its state to Linux, and consumes `Fn+Space` inside the firmware. On GPD's 2025-01-16 keyboard firmware, that physical chord cycles 30-second automatic → always on → off. `keyboard-backlight get` therefore reports the hardware truth instead of fabricating a state, and `pick` shows the physical instruction.
 - `pocket4-ws` / watcher — Lua-compatible workspace dispatch and event-driven bar refresh.
 - Hyprgrass — touchscreen gestures inside the compositor; no direct evdev ACL/daemon.
+- fuzzel — the launcher and every `myarch menu` picker run with `keyboard-focus=on-demand`, so a tap on any window dismisses them. fuzzel's default, `exclusive`, locks keyboard focus to itself until it closes, which on a touch-only Pocket left an opened launcher with no way out. A tap on the bar dismisses them too, so every workspace has a target within reach. A tap on bare desktop does not: there is no window there to take focus.
 
 The Pocket's keyboard fold does not change `SW_LID`, and the screen accelerometer cannot distinguish upright tablet use from an open laptop. Automatic tablet detection would invent state and is deliberately absent.
 

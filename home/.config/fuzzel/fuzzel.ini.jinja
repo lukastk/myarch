@@ -25,6 +25,31 @@ font=IoskeleyMonoTerm Nerd Font Mono:size=11
 # kitty and a documented no-op on foot, so one spelling covers both.
 terminal={{ profile.terminal }} -e
 
+# Dismiss by tapping outside. pocket4 is a touchscreen and the launcher draws no
+# on-screen cancel, so with fuzzel's default `exclusive` keyboard focus — which
+# locks all keyboard input to fuzzel until it closes, and therefore lets nothing
+# else ever take focus — a launcher opened by touch could not be dismissed by
+# touch at all. `on-demand` lets the tapped window take focus, and
+# exit-on-keyboard-focus-loss (default yes) closes fuzzel when it does.
+#
+# Measured on pocket4 2026-09-15, because none of this is obvious:
+#   - A tap on a WINDOW dismisses, and so does a tap on the BAR. Waybar spans
+#     the full width at the top of every workspace, so there is always a target
+#     within reach even on an otherwise empty workspace.
+#   - A tap on BARE DESKTOP does NOT dismiss: nothing is there to take focus.
+#     This is the one remaining gap and it is why the bar matters.
+#   - `input:follow_mouse = 1` does NOT close it on hover. That is the Sway
+#     <= 1.7 hazard fuzzel's own man page warns about, and it does not apply
+#     here — Hyprland only refocuses off the layer surface on a real click.
+#     Checked over 26 motion trials, including fast corner-to-corner flicks and
+#     motion right after a window had been clicked: 0 spurious closes. (One
+#     close was seen in an early run and never reproduced; if the launcher ever
+#     vanishes on its own, start here.)
+#   - It costs a little input latency: keystrokes land reliably from ~50ms
+#     rather than exclusive's ~20ms (8/8 vs 6/8 at 20ms). Still far inside the
+#     time it takes to press a second key, and far better than wofi's ~125ms.
+keyboard-focus=on-demand
+
 # Width is in CHARACTERS, capped so the surface still fits pocket4's narrowest
 # logical width (800 — portrait at scale 2.0): 72 characters plus the default
 # 40px horizontal padding stays inside 800 logical px. The widest picker
