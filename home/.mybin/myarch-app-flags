@@ -8,8 +8,12 @@ $XDG_CONFIG_HOME/<app>-flags.conf at launch. This composes those files from
 installer calls it with the current mode, and pocket4-tablet-mode calls it on
 every toggle — so the mode logic exists once.
 
-Prints the path of every file it wrote, one per line; the installer records them
-as installed files.
+It also records the mode itself in $XDG_STATE_HOME/myarch/desktop-mode, for apps
+that switch at runtime rather than at launch (mysystem watches it for Obsidian).
+
+Prints the path of every flags file it wrote, one per line; the installer records
+them as installed files. The desktop-mode file is state, not configuration, so it
+is not printed.
 """
 
 from __future__ import annotations
@@ -30,6 +34,11 @@ MODES = ("laptop", "tablet")
 def config_dir() -> Path:
     # The same rule the Arch launchers use to find <app>-flags.conf.
     return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+
+
+def desktop_mode_file() -> Path:
+    # Read by mysystem (desktop-tablet-mode.ts) with the same rule.
+    return Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state") / "myarch/desktop-mode"
 
 
 def string_list(value: object, where: str) -> list[str]:
@@ -89,6 +98,9 @@ def write(mode: str) -> list[Path]:
         destination = config_dir() / app["file"]
         atomic_write(destination, header + "".join(flag + "\n" for flag in flags))
         written.append(destination)
+    # Last, so an app watching it sees the new mode only once every flags file
+    # already matches it.
+    atomic_write(desktop_mode_file(), mode + "\n")
     return written
 
 

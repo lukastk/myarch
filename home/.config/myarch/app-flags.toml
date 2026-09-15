@@ -6,8 +6,10 @@
 # pocket4-tablet-mode on every toggle — so they always match the current mode.
 # Edit this file, never the generated ones.
 #
-# A running app keeps the flags it was started with: switching mode reaches Brave
-# or Obsidian the next time it is launched.
+# A running app keeps the flags it was started with, so a launch flag reaches an
+# app only when it next starts. The same command also records the current mode in
+# $XDG_STATE_HOME/myarch/desktop-mode ("tablet" or "laptop") for apps that switch
+# at runtime instead — Obsidian, through mysystem (see apps.obsidian).
 
 # Flags added in tablet mode to every app with `tablet = true`.
 #
@@ -31,7 +33,13 @@ file = "brave-flags.conf"
 always = ["--ozone-platform-hint=auto"]
 tablet = true
 
+# Obsidian gets NO tablet launch flag. mysystem reads desktop-mode, watches it,
+# and switches Obsidian's pointer emulation live when tablet mode toggles (and on
+# every plugin load). A launch flag would work against that: Blink settings given
+# at launch cannot be undone at runtime, so an Obsidian started in tablet mode
+# stayed hover-less after switching back to laptop until it was restarted. The file
+# is still generated so a previous tablet flag in it is cleared.
 [apps.obsidian]
 file = "obsidian-flags.conf"
 always = []
-tablet = true
+tablet = false
