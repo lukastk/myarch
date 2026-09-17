@@ -28,9 +28,20 @@
 [tablet]
 flags = ["--blink-settings=availablePointerTypes=2,primaryPointerType=2,availableHoverTypes=1,primaryHoverType=1"]
 
+# Every app gets TouchTextEditingRedesign, in BOTH modes: the touchscreen is there
+# with the keyboard out too. Chromium enables it by default only on ChromeOS. It
+# adds long-press-and-keep-dragging selection: long-press a word, keep the finger
+# down, and the selection follows it, without the separate handle drag that
+# Hyprland breaks (it sends a pointer motion before every touch, and Chromium hides
+# the handles on pointer motion). Measured 2026-09-17 in Brave 153 with a uinput
+# touchscreen: the selection extended word by word. Side effects, from Chromium
+# source: a horizontal swipe inside a text field moves the caret, and a long press
+# on a link or on already-selected text starts drag-and-drop. Chromium honours only
+# the LAST --enable-features switch, so a second feature must join this one
+# (comma-separated) rather than add another --enable-features line.
 [apps.brave]
 file = "brave-flags.conf"
-always = ["--ozone-platform-hint=auto"]
+always = ["--ozone-platform-hint=auto", "--enable-features=TouchTextEditingRedesign"]
 tablet = true
 
 # Obsidian gets NO tablet launch flag. mysystem reads desktop-mode, watches it,
@@ -38,8 +49,8 @@ tablet = true
 # every plugin load). A launch flag would work against that: Blink settings given
 # at launch cannot be undone at runtime, so an Obsidian started in tablet mode
 # stayed hover-less after switching back to laptop until it was restarted. The file
-# is still generated so a previous tablet flag in it is cleared.
+# carries only the mode-independent `always` flags.
 [apps.obsidian]
 file = "obsidian-flags.conf"
-always = []
+always = ["--enable-features=TouchTextEditingRedesign"]
 tablet = false
