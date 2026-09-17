@@ -105,6 +105,16 @@ if hl.plugin.hyprgrass ~= nil then
                 -- screens. Raise it if three fingers on an 8.8" panel feels
                 -- like it needs too long a travel.
                 sensitivity = 4.0,
+                -- Hold Shift and a finger acts as the mouse: press where it lands,
+                -- drag, release on lift, so dragging across text selects it in
+                -- any app. Decided at touch-down with no other finger on the
+                -- screen; that finger stays a pointer until it lifts. Apps see
+                -- Shift too, so in an editor with a caret the drag extends the
+                -- selection FROM THE CARET (Shift+click semantics): tap where the
+                -- selection should start, then Shift-drag to its end. This option
+                -- exists only in the lukastk/hyprgrass fork (docs/plugin-forks.md);
+                -- on a hyprgrass without it Hyprland reports a config error.
+                pointer_emulation_mods = "SHIFT",
             },
         },
     })

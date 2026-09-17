@@ -225,6 +225,9 @@ class RenderTests(unittest.TestCase):
         self.assertIn('fingers = 3, direction = "up"', pocket)
         self.assertIn('fingers = 4, direction = "up"', pocket)
         self.assertNotIn('direction = "up"', ideapad)
+        # Shift + finger drag = mouse drag needs the hyprgrass fork, which only pocket4 loads.
+        self.assertIn('pointer_emulation_mods = "SHIFT"', pocket)
+        self.assertNotIn("pointer_emulation_mods", ideapad)
 
     def test_profile_specific_sources_do_not_install_on_ideapad(self) -> None:
         pocket_files = [path for path in (ROOT / "home").glob("**/*") if path.is_file() and (path.name.startswith("pocket4-") or path.name in {"config-narrow.jsonc.jinja", "config-tablet-landscape.jsonc.jinja", "style-compact.css", "pocket4.zsh"})]

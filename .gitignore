@@ -5,3 +5,9 @@ __pycache__/
 # Research inputs are intentionally not part of the distributable desktop.
 research/
 tmp/
+
+# makepkg output for packages/*
+packages/*/src/
+packages/*/pkg/
+packages/*/*.pkg.tar.zst
+packages/*/*.tar.gz

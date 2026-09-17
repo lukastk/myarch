@@ -1,0 +1,21 @@
+diff --git i/src/managers/input/InputManager.cpp w/src/managers/input/InputManager.cpp
+index 187dbe8..8f32a01 100644
+--- i/src/managers/input/InputManager.cpp
++++ w/src/managers/input/InputManager.cpp
+@@ -184,6 +184,16 @@ void CInputManager::onMouseWarp(IPointer::SMotionAbsoluteEvent e) {
+ }
+ 
+ void CInputManager::simulateMouseMovement() {
++    // While touch is the last input nobody is using the pointer, so a synthetic move
++    // (a surface mapped, unmapped or moved under it) only re-announces a stale pointer
++    // as wl_pointer.enter/motion. Clients take that as real mouse activity: Chromium
++    // dismisses its touch-selection handles and touch menu on it, and grabbing a handle
++    // closes that menu (unmapping a subsurface), so every handle drag ended as soon as it
++    // started. Touch-driven mouse-bind drags (a plugin moving the pointer while a drag
++    // target is held) still need the move.
++    if (m_lastInputTouch && !g_layoutManager->dragController()->target())
++        return;
++
+     m_lastCursorPosFloored = m_lastCursorPosFloored - Vector2D(1, 1); // hack: force the mouseMoveUnified to report without making this a refocus.
+     mouseMoveUnified(Time::millis(Time::steadyNow()));
+ }

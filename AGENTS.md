@@ -18,6 +18,7 @@ myarch is an Arch Linux/Hyprland desktop repository installed on Pocket 4 and Id
 - `home/` owns user configuration and commands.
 - `profiles/` owns explicit hardware contracts; never autodetect profile.
 - `themes/` must all expose the exact same semantic key set.
+- `packages/` holds patched Arch packages that are built and installed by hand, never by `install.sh`. Each has a README saying why, how to rebuild, and when to drop it.
 - `install.sh` is the entry point: the Arch-only guard, argument parsing, the complete pacman package set, and the paru AUR packages (`ticktick`, `voxtype-bin`). Add desktop packages there. It then hands off to `install.py`.
 - `install.py` owns rendering, state migration, system integration, plugins, and coherent reload.
 - Myrig owns fleet composition, clone order, private wallpapers, RustDesk policy, Pocket system provisioning, server mode, backups, Sesh, and subswitcher.

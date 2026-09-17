@@ -1,6 +1,6 @@
 # Hyprpm plugin forks
 
-myarch installs both hyprpm plugins from forks under `lukastk`, each one commit on top of upstream. They are temporary: every fork has a concrete drop condition below, and every site to change carries the same `TODO(cleanup):` text (`grep -rn "TODO(cleanup): drop the lukastk/"`).
+myarch installs both hyprpm plugins from forks under `lukastk`. hyprexpo's fork is one manifest commit on top of upstream; hyprgrass's also builds a pocket4 branch with two code changes. They are temporary: every fork has a concrete drop condition below, and every site to change carries the same `TODO(cleanup):` text (`grep -rn "TODO(cleanup): drop the lukastk/"`).
 
 ## Why a manifest change needs a fork
 
@@ -13,9 +13,20 @@ Two hyprpm behaviours (read from the v0.56.2 source, `hyprpm/src/core/PluginMana
 
 ### `lukastk/hyprgrass` (touchscreen gestures, pocket4 only)
 
-- **Change:** removes the `[hyprgrass-pulse]` and `[hyprgrass-backlight]` tables from `hyprpm.toml`.
-- **Why:** upstream deleted both examples' source (horriblename/hyprgrass e8f09840, 2026-08-31) but kept their manifest entries, whose build steps only echo a deprecation notice. After the aquamarine 0.15 ABI change this left pocket4 with no plugins loaded at all, so no touch gestures.
-- **Drop when:** upstream's `hyprpm.toml` no longer lists either table. Check with `gh api repos/horriblename/hyprgrass/contents/hyprpm.toml --jq .content | base64 -d | grep -c '^\[hyprgrass-'`; `0` means drop.
+Three changes, in two places:
+
+1. **Manifest** (on `main`): removes the `[hyprgrass-pulse]` and `[hyprgrass-backlight]` tables from `hyprpm.toml`. Upstream deleted both examples' source (horriblename/hyprgrass e8f09840, 2026-08-31) but kept their manifest entries, whose build steps only echo a deprecation notice. After the aquamarine 0.15 ABI change this left pocket4 with no plugins loaded at all, so no touch gestures.
+2. **Touch-down refocus fix** (branch `pocket4-hyprland-0.56.2`, commit `fa86801`). `GestureManager::onTouchDown` called `refocus()` with no position, which sent `wl_pointer.motion` to the app right before every `wl_touch.down`. Chromium (Brave, Obsidian) hides its touch-selection handles and touch menu on pointer motion, so no selection handle could be dragged and the Cut/Copy bar could not be tapped. It now calls `refocus(touchPos)`, like Hyprland's own touch-down.
+3. **`pointer_emulation_mods`** (same branch, commit `9ff50a2`). While the named modifiers are held, a finger drives the mouse (press, drag, release), so Shift + finger drag selects text. Set in `src/hyprland/60-gestures.lua.jinja`.
+
+`main`'s `hyprpm.toml` pins Hyprland 0.56.2 (`efb50993…`) to the branch tip `9ff50a2` instead of upstream's `8e605468`, which the branch is based on.
+
+- **On a Hyprland update:** upstream's pin for the new Hyprland commit builds WITHOUT changes 2 and 3. Rebase the branch onto that pin (name it after the new version), move the new pin to its tip, and rerun the installer. Missed, it fails loudly: Hyprland reports `pointer_emulation_mods` as an unknown option in `hyprctl configerrors`.
+- **Drop when:** all three are upstream, or the Shift drag is no longer wanted and the first two are. Checks:
+  - manifest: `gh api repos/horriblename/hyprgrass/contents/hyprpm.toml --jq .content | base64 -d | grep -c '^\[hyprgrass-'` prints `0`;
+  - refocus: `gh api repos/horriblename/hyprgrass/contents/src/GestureManager.cpp --jq .content | base64 -d | grep -c 'g_pInputManager->refocus();'` prints `0`;
+  - pointer emulation: an equivalent option exists upstream (none at the time of writing; nothing has been proposed upstream yet).
+- **Related:** range-handle dragging also needs the Hyprland patch in `packages/hyprland/` (see its README): with only this fork, grabbing a handle still ends the drag.
 
 ### `lukastk/hyprexpo` (workspace overview, both profiles)
 
