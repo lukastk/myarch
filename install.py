@@ -392,13 +392,6 @@ def configure_plugins(profile: dict, environment: dict[str, str] | None) -> None
         run(["hyprpm", "enable", name], env=environment)
 
 
-def stop_replaced_dictation() -> None:
-    """Stop the old daemon before its generated configuration is retired."""
-    old_cli = shutil.which("mydictation")
-    if old_cli is not None:
-        run([old_cli, "daemon", "stop"], check=False)
-
-
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -545,7 +538,6 @@ def main() -> int:
     migrate_myrig_state()
     previous = pause_autoreload(environment)
     try:
-        stop_replaced_dictation()
         if not args.config_only:
             prepare_external(profile)
         render_home(args.profile, profile, theme_name, theme)
