@@ -52,7 +52,7 @@ build_dir=${XDG_CACHE_HOME:-$HOME/.cache}/myarch/packages/$name
 mkdir -p -- "$build_dir"
 find "$source_dir" -maxdepth 1 -type f ! -name README.md -exec cp -t "$build_dir" -- {} +
 echo "install-patched: building $name $patched in $build_dir (installed: ${installed:-none})"
-(cd -- "$build_dir" && makepkg --syncdeps --cleanbuild --force --noconfirm)
+(cd -- "$build_dir" && makepkg --syncdeps --cleanbuild --clean --force --noconfirm)
 
 package=$(cd -- "$build_dir" && makepkg --packagelist | grep -F "/$name-$patched-")
 if [[ $(wc -l <<<"$package") != 1 || ! -f $package ]]; then

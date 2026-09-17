@@ -32,7 +32,7 @@ Obsidian, and the bar's Copy button works by touch.
 
 `install.sh --profile pocket4` does it: `packages/install-patched hyprland` copies
 this directory to `~/.cache/myarch/packages/hyprland`, runs
-`makepkg --syncdeps --cleanbuild`, and `pacman -U`s the `hyprland` package (not
+`makepkg --syncdeps --cleanbuild --clean` (the build tree, ~3 GB, is removed afterwards), and `pacman -U`s the `hyprland` package (not
 `hyprpm` or `-debug`). It skips the build when `0.56.2-3.1` is already installed, so
 **bump the suffix (3.1 -> 3.2) whenever the patch changes.** Restart Hyprland for a
 new build to take effect.
