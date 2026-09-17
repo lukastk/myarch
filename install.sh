@@ -68,8 +68,37 @@ if [[ $config_only == false ]]; then
     noto-fonts noto-fonts-emoji noto-fonts-cjk
     ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols-common otf-font-awesome gsfonts
     keyd python-jinja jq fzf shellcheck util-linux cpio cmake git meson ninja pkgconf glm
+    # makepkg's toolchain, for the patched packages below (and paru's AUR builds).
+    base-devel
   )
-  sudo pacman -S --noconfirm --needed "${packages[@]}"
+
+  # Packages this profile runs a myarch-patched build of: profiles/<name>.toml
+  # [packages] patched, built from packages/<package>/. They must stay out of the
+  # pacman -S below, which would reinstall the stock build over the patched one
+  # (pacman -S --needed treats the repo's 3 as the version to have, not 3.1). A
+  # dependency such as hyprpm -> hyprland can still pull the stock build in on a
+  # fresh machine; install-patched then replaces it.
+  patched_list=$(python3 - "$repo/profiles/$profile.toml" <<'PY'
+import sys, tomllib
+with open(sys.argv[1], "rb") as stream:
+    patched = tomllib.load(stream)["packages"]["patched"]
+if not isinstance(patched, list) or not all(isinstance(name, str) and name for name in patched):
+    raise SystemExit(f"{sys.argv[1]}: [packages] patched must be a list of package names, got {patched!r}")
+print("\n".join(patched))
+PY
+  )
+  patched=()
+  [[ -n $patched_list ]] && mapfile -t patched <<<"$patched_list"
+
+  stock=()
+  for package in "${packages[@]}"; do
+    [[ " ${patched[*]} " == *" $package "* ]] || stock+=("$package")
+  done
+  sudo pacman -S --noconfirm --needed "${stock[@]}"
+
+  for package in "${patched[@]}"; do
+    "$repo/packages/install-patched" "$package"
+  done
 
   if ! command -v paru >/dev/null 2>&1; then
     echo "myarch desktop application installation requires paru for AUR packages" >&2

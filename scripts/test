@@ -14,4 +14,4 @@ for file in "${shell_files[@]}"; do
     shellcheck --severity=warning -x "$file"
   fi
 done
-shellcheck --severity=warning "$repo/install.sh" "$repo/scripts/test"
+shellcheck --severity=warning "$repo/install.sh" "$repo/scripts/test" "$repo/packages/install-patched"

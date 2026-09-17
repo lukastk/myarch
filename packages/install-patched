@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# Build and install the patched Arch package in packages/<name>/.
+#
+# packages/<name>/PKGBUILD is Arch's PKGBUILD for that package with myarch's patch
+# applied in prepare() and a ".N" suffix on pkgrel (3 -> 3.1). It is built only
+# while the repositories still carry the release it was based on: once Arch ships
+# a newer one, building the old version would downgrade the package against
+# already-upgraded dependencies, so this stops with instructions instead. Change
+# the patch -> bump the suffix, or an installed build counts as current.
+set -euo pipefail
+
+if (($# != 1)); then
+  echo "usage: install-patched <package>" >&2
+  exit 2
+fi
+name=$1
+repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+source_dir=$repo/packages/$name
+if [[ ! -f $source_dir/PKGBUILD ]]; then
+  echo "install-patched: $source_dir/PKGBUILD does not exist" >&2
+  exit 1
+fi
+
+srcinfo=$(cd -- "$source_dir" && makepkg --printsrcinfo)
+pkgver=$(awk -F' = ' '$1 ~ /^\tpkgver$/ {print $2; exit}' <<<"$srcinfo")
+pkgrel=$(awk -F' = ' '$1 ~ /^\tpkgrel$/ {print $2; exit}' <<<"$srcinfo")
+if [[ -z $pkgver || $pkgrel != *.* ]]; then
+  echo "install-patched: $source_dir/PKGBUILD needs pkgver and a suffixed pkgrel (e.g. 3.1), got '$pkgver' '$pkgrel'" >&2
+  exit 1
+fi
+patched=$pkgver-$pkgrel
+base=$pkgver-${pkgrel%.*}
+
+available=$(LC_ALL=C pacman -Si "$name" | awk -F': ' '/^Version/ {print $2; exit}')
+if [[ $available != "$base" ]]; then
+  cat >&2 <<MSG
+install-patched: packages/$name patches $name $base, but the repositories now have $available.
+Rebase its patch onto $available (see packages/$name/README.md) and set pkgver/pkgrel
+to match with a new suffix, or delete packages/$name and drop it from the profile's
+[packages] patched list if $available no longer needs the patch.
+MSG
+  exit 1
+fi
+
+installed=$(pacman -Q "$name" 2>/dev/null | awk '{print $2}' || true)
+if [[ $installed == "$patched" ]]; then
+  echo "install-patched: $name $patched is already installed"
+  exit 0
+fi
+
+build_dir=${XDG_CACHE_HOME:-$HOME/.cache}/myarch/packages/$name
+mkdir -p -- "$build_dir"
+find "$source_dir" -maxdepth 1 -type f ! -name README.md -exec cp -t "$build_dir" -- {} +
+echo "install-patched: building $name $patched in $build_dir (installed: ${installed:-none})"
+(cd -- "$build_dir" && makepkg --syncdeps --cleanbuild --force --noconfirm)
+
+package=$(cd -- "$build_dir" && makepkg --packagelist | grep -F "/$name-$patched-")
+if [[ $(wc -l <<<"$package") != 1 || ! -f $package ]]; then
+  echo "install-patched: expected exactly one built $name-$patched package, got: $package" >&2
+  exit 1
+fi
+sudo pacman -U --noconfirm -- "$package"

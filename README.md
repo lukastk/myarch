@@ -101,7 +101,7 @@ src/hyprland/         ordered Lua/Jinja source fragments
 profiles/             explicit machine contracts
 themes/               semantic palettes
 system/keyd/           root-owned Caps→F12 mapping
-packages/              hand-built patched Arch packages (not built by install.sh)
+packages/              patched Arch package builds, per profile
 install.sh             package bootstrap
 install.py             renderer, system integration, plugins, migrations
 scripts/test           local validation entry point

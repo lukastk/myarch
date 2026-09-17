@@ -1,10 +1,11 @@
 # Patched Hyprland for pocket4 touch selection
 
 Arch's `hyprland` 0.56.2-3 with one patch, `touch-synthetic-pointer.patch`, built
-as `0.56.2-3.1`. It is installed on pocket4 only, and by hand: `install.sh`
-does not build it.
+as `0.56.2-3.1`. pocket4 lists it in `profiles/pocket4.toml` `[packages] patched`, so
+`install.sh` builds and installs it (`packages/install-patched hyprland`); ideapad
+keeps the stock package.
 
-<!-- TODO(cleanup): delete packages/hyprland (and reinstall the stock Arch hyprland) — once Hyprland stops sending synthetic pointer motion while touch is the last input; see packages/hyprland/README.md. -->
+<!-- TODO(cleanup): delete packages/hyprland and the "hyprland" entry in profiles/pocket4.toml [packages] patched, then reinstall the stock Arch hyprland — once Hyprland stops sending synthetic pointer motion while touch is the last input; see packages/hyprland/README.md. -->
 
 ## What the patch fixes
 
@@ -29,18 +30,25 @@ Obsidian, and the bar's Copy button works by touch.
 
 ## Build and install
 
-```bash
-cd packages/hyprland
-makepkg -f                      # needs base-devel and the PKGBUILD's makedepends
-sudo pacman -U hyprland-0.56.2-3.1-x86_64.pkg.tar.zst
-```
+`install.sh --profile pocket4` does it: `packages/install-patched hyprland` copies
+this directory to `~/.cache/myarch/packages/hyprland`, runs
+`makepkg --syncdeps --cleanbuild`, and `pacman -U`s the `hyprland` package (not
+`hyprpm` or `-debug`). It skips the build when `0.56.2-3.1` is already installed, so
+**bump the suffix (3.1 -> 3.2) whenever the patch changes.** Restart Hyprland for a
+new build to take effect.
 
-Restarting Hyprland is required for it to take effect. Build output
-(`src/`, `pkg/`, `*.pkg.tar.zst`, the source tarball) is ignored by git.
+## When Arch updates Hyprland
 
-## It is lost silently
+A system upgrade (`pacman -Syu`) replaces this build with Arch's newer one, and
+handle drags break again. The next `install.sh` run then stops, because
+install-patched refuses to build 0.56.2 once the repositories carry anything but
+0.56.2-3. To fix it:
 
-The next Arch upgrade of `hyprland` (anything newer than 0.56.2-3.1) replaces it,
-and handle drags break again with no error. Before accepting that upgrade, rebase
-the patch onto the new source and rebuild, or check whether upstream has fixed
-it: search Hyprland's `simulateMouseMovement` for a touch-input guard.
+1. Check whether upstream already has an equivalent guard in
+   `CInputManager::simulateMouseMovement`. If so, delete this directory and the
+   `"hyprland"` entry in `profiles/pocket4.toml`.
+2. Otherwise take Arch's new PKGBUILD
+   (`https://gitlab.archlinux.org/archlinux/packaging/packages/hyprland`), re-apply
+   the three edits here (pkgrel suffix, the patch in `source`/`sha256sums`, `patch`
+   in `prepare()`), rebase the patch onto the new source, and rerun `install.sh`.
+3. The hyprgrass fork needs its matching update too (`docs/plugin-forks.md`).

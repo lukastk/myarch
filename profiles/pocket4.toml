@@ -29,3 +29,10 @@ hyprgrass = true
 
 [external]
 wallpaper_directory = "~/Pictures/wallpapers"
+
+[packages]
+# Built from packages/<name>/ with a myarch patch instead of installed from the
+# repositories (install.sh, packages/install-patched). See each package's README.
+# hyprland: touch selection handles drag (no synthetic pointer motion during touch).
+# TODO(cleanup): delete packages/hyprland and the "hyprland" entry in profiles/pocket4.toml [packages] patched, then reinstall the stock Arch hyprland — once Hyprland stops sending synthetic pointer motion while touch is the last input; see packages/hyprland/README.md.
+patched = ["hyprland"]

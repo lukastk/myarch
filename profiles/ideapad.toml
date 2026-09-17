@@ -16,3 +16,8 @@ hyprgrass = false
 
 [external]
 wallpaper_directory = "~/Pictures/wallpapers"
+
+[packages]
+# Built from packages/<name>/ with a myarch patch instead of installed from the
+# repositories (install.sh, packages/install-patched). See each package's README.
+patched = []

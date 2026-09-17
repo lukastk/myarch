@@ -18,7 +18,7 @@ myarch is an Arch Linux/Hyprland desktop repository installed on Pocket 4 and Id
 - `home/` owns user configuration and commands.
 - `profiles/` owns explicit hardware contracts; never autodetect profile.
 - `themes/` must all expose the exact same semantic key set.
-- `packages/` holds patched Arch packages that are built and installed by hand, never by `install.sh`. Each has a README saying why, how to rebuild, and when to drop it.
+- `packages/` holds myarch-patched builds of Arch packages. A profile lists the ones it uses in `[packages] patched`; `install.sh` keeps those out of its `pacman -S` and runs `packages/install-patched` for each, which fails loudly once the repositories move past the release a patch was made for. Each package has a README saying why, how to rebase, and when to drop it.
 - `install.sh` is the entry point: the Arch-only guard, argument parsing, the complete pacman package set, and the paru AUR packages (`ticktick`, `voxtype-bin`). Add desktop packages there. It then hands off to `install.py`.
 - `install.py` owns rendering, state migration, system integration, plugins, and coherent reload.
 - Myrig owns fleet composition, clone order, private wallpapers, RustDesk policy, Pocket system provisioning, server mode, backups, Sesh, and subswitcher.
@@ -50,14 +50,16 @@ Every commit message must be a prompt another agent can use to recreate the work
 
 Any explicitly agreed temporary path must carry the exact `TODO(cleanup):` tag at every cleanup site and state a concrete removal event/date.
 
-## Scheduled review: plugin forks and their sync (due 2026-11-02)
+## Scheduled review: carried patches and upstream reports (due 2026-11-02)
 
-Since 2026-09-17, hyprexpo and hyprgrass have been installed from temporary `lukastk` forks. `.github/workflows/sync-plugin-forks.yml` keeps them current, using `PLUGIN_FORK_SYNC_TOKEN`, a copy of the account-wide GitHub token. Why each fork exists and when it can go: `docs/plugin-forks.md`.
+Since 2026-09-17, hyprexpo and hyprgrass have been installed from temporary `lukastk` forks. `.github/workflows/sync-plugin-forks.yml` keeps them current, using `PLUGIN_FORK_SYNC_TOKEN`, a copy of the account-wide GitHub token. Why each fork exists and when it can go: `docs/plugin-forks.md`. The hyprgrass fork also carries two code changes for touch selection (branch `pocket4-hyprland-0.56.2`), and pocket4 runs a patched Hyprland from `packages/hyprland/`. Reporting either fix upstream was deliberately deferred to this review.
 
-**On or after 2026-11-02, bring this review up with Lukas near the start of any session in this repo**, whatever the session is about, until he has decided and this section has been updated or removed. Before that date, raise it only if the sync job is failing or the work touches hyprpm plugins.
+**On or after 2026-11-02, bring this review up with Lukas near the start of any session in this repo**, whatever the session is about, until he has decided and this section has been updated or removed. Before that date, raise it only if the sync job is failing, the work touches hyprpm plugins, or Hyprland is being updated (the hyprgrass branch and the Hyprland patch both need rebasing then).
 
 For the review:
 - Run each fork's drop check from `docs/plugin-forks.md` and say which forks can already go back to upstream.
 - Summarise the recent sync runs (`gh run list -R lukastk/myarch --workflow sync-plugin-forks.yml`): how often they failed, and why.
 - Ask whether to keep the forks and the automation, narrow the token to a fine-grained one, or drop them.
+- Check whether upstream hyprgrass has the touch-down refocus fix and whether Hyprland's `simulateMouseMovement` skips touch input on its own (checks in `docs/plugin-forks.md` and `packages/hyprland/README.md`); say what can be dropped.
+- Ask whether to report upstream: the hyprgrass touch-down fix, the Hyprland patch, and whether to offer `pointer_emulation_mods` to hyprgrass. Never file anything upstream without his explicit go-ahead.
 - Decision notes are in the myvault pad `pad/Revisit myarch's hyprpm plugin forks.md`. The matching task (📅 2026-11-02) is in the planner note `pln/2026-09-17.md`; mark it done when the review is finished.

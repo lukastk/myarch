@@ -229,6 +229,25 @@ class RenderTests(unittest.TestCase):
         self.assertIn('pointer_emulation_mods = "SHIFT"', pocket)
         self.assertNotIn("pointer_emulation_mods", ideapad)
 
+    def test_patched_packages_are_declared_and_buildable(self) -> None:
+        import tomllib
+        declared = {}
+        for path in sorted((ROOT / "profiles").glob("*.toml")):
+            with path.open("rb") as stream:
+                patched = tomllib.load(stream)["packages"]["patched"]
+            self.assertIsInstance(patched, list, path)
+            declared[path.stem] = patched
+            for name in patched:
+                pkgbuild = ROOT / "packages" / name / "PKGBUILD"
+                self.assertTrue((ROOT / "packages" / name / "README.md").is_file(), name)
+                # A ".N" suffix on Arch's pkgrel is what install-patched derives the base release from.
+                self.assertRegex(pkgbuild.read_text(), r"(?m)^pkgrel=\d+\.\d+$", name)
+        self.assertEqual({"pocket4": ["hyprland"], "ideapad": []}, declared)
+        install = (ROOT / "install.sh").read_text()
+        # Patched names are kept out of pacman -S, which would reinstall the stock build.
+        self.assertIn('sudo pacman -S --noconfirm --needed "${stock[@]}"', install)
+        self.assertIn('"$repo/packages/install-patched" "$package"', install)
+
     def test_profile_specific_sources_do_not_install_on_ideapad(self) -> None:
         pocket_files = [path for path in (ROOT / "home").glob("**/*") if path.is_file() and (path.name.startswith("pocket4-") or path.name in {"config-narrow.jsonc.jinja", "config-tablet-landscape.jsonc.jinja", "style-compact.css", "pocket4.zsh"})]
         self.assertGreaterEqual(len(pocket_files), 10)
