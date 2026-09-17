@@ -10,9 +10,10 @@ name: Sync plugin forks
 # the manifest line the fork changes, which is when to check whether the fork
 # is still needed at all.
 #
-# PLUGIN_FORK_SYNC_TOKEN is a fine-grained token for ONLY the forks below, with
-# Contents and Workflows read/write. Workflows is required because upstream
-# edits its own .github/workflows, which GITHUB_TOKEN can never write.
+# PLUGIN_FORK_SYNC_TOKEN must be able to write the forks' .github/workflows
+# (upstream edits its own workflows; GITHUB_TOKEN can never write those). It is
+# a copy of the 1Password GITHUB_TOKEN; docs/plugin-forks.md has the trade-off,
+# how to narrow it, and how to refresh it after that token is rotated.
 
 on:
   schedule:
