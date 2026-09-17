@@ -98,8 +98,9 @@ bright7={{ theme.palette[15][1:] }}
 # emitted as OSC-8 hyperlinks by the program itself are underlined and can be
 # activated the same way.
 #
-# xdg-open already routes obsidian:// to obsidian.desktop on this machine
-# (verify with: xdg-mime query default x-scheme-handler/obsidian).
+# xdg-open routes obsidian:// to md.obsidian.Obsidian.desktop, which myrig
+# overrides so the link reaches the app rather than the Obsidian CLI shim in
+# ~/.local/bin (verify with: xdg-mime query default x-scheme-handler/obsidian).
 launch=xdg-open ${url}
 osc8-underline=always
 regex=(((obsidian://|https?://|mailto:|ftp://|file:|ssh:|ssh://|git://|tel:|magnet:|ipfs://|ipns://|gemini://|gopher://|news:)|www\.)([0-9a-zA-Z:/?#@!$&*+,;=.~_%^\-]+|\([]\["0-9a-zA-Z:/?#@!$&'*+,;=.~_%^\-]*\)|\[[\(\)"0-9a-zA-Z:/?#@!$&'*+,;=.~_%^\-]*\]|"[]\[\(\)0-9a-zA-Z:/?#@!$&'*+,;=.~_%^\-]*"|'[]\[\(\)0-9a-zA-Z:/?#@!$&*+,;=.~_%^\-]*')+([0-9a-zA-Z/#@$&*+=~_%^\-]|\([]\["0-9a-zA-Z:/?#@!$&'*+,;=.~_%^\-]*\)|\[[\(\)"0-9a-zA-Z:/?#@!$&'*+,;=.~_%^\-]*\]|"[]\[\(\)0-9a-zA-Z:/?#@!$&'*+,;=.~_%^\-]*"|'[]\[\(\)0-9a-zA-Z:/?#@!$&*+,;=.~_%^\-]*'))
