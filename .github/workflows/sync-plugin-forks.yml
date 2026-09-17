@@ -1,0 +1,53 @@
+name: Sync plugin forks
+
+# install.py installs hyprpm plugins from lukastk forks that each carry one
+# hyprpm.toml commit on top of upstream (docs/plugin-forks.md). hyprpm builds
+# the commit a manifest pins for the running Hyprland, so a fork that stops
+# receiving upstream's new pins builds the wrong source after the next Hyprland
+# update. This merges upstream into each fork daily.
+#
+# A merge conflict fails the job on purpose: it usually means upstream changed
+# the manifest line the fork changes, which is when to check whether the fork
+# is still needed at all.
+#
+# PLUGIN_FORK_SYNC_TOKEN is a fine-grained token for ONLY the forks below, with
+# Contents and Workflows read/write. Workflows is required because upstream
+# edits its own .github/workflows, which GITHUB_TOKEN can never write.
+
+on:
+  schedule:
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: sync-plugin-forks
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # TODO(cleanup): drop the lukastk/hyprexpo fork (install.py URL back to sandwichfarm/hyprexpo, its .github/workflows/sync-plugin-forks.yml entry, its docs/plugin-forks.md section, then archive the fork) — once upstream's pin for the running Hyprland contains sandwichfarm/hyprexpo#137.
+          - repo: lukastk/hyprexpo
+            branch: master
+          # TODO(cleanup): drop the lukastk/hyprgrass fork (install.py URL back to horriblename/hyprgrass, its .github/workflows/sync-plugin-forks.yml entry, its docs/plugin-forks.md section, then archive the fork) — once upstream's hyprpm.toml no longer lists hyprgrass-pulse or hyprgrass-backlight.
+          - repo: lukastk/hyprgrass
+            branch: main
+    steps:
+      - name: Merge upstream into ${{ matrix.repo }}
+        env:
+          GH_TOKEN: ${{ secrets.PLUGIN_FORK_SYNC_TOKEN }}
+          REPO: ${{ matrix.repo }}
+          BRANCH: ${{ matrix.branch }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::PLUGIN_FORK_SYNC_TOKEN is not set; see docs/plugin-forks.md"
+            exit 1
+          fi
+          gh api --method POST "repos/$REPO/merge-upstream" -f branch="$BRANCH" --jq '"\(.merge_type): \(.message)"'

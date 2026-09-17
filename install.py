@@ -52,6 +52,7 @@ VOXTYPE_ARTIFACTS = {
     ),
 }
 MONO_FONT_FAMILY = "IoskeleyMonoTerm Nerd Font Mono"
+HYPRPM_REPOSITORY_RE = re.compile(r"Repository (\S+) \(by ([^)]+)\):")
 
 
 def run(argv: list[str], *, check: bool = True, capture: bool = False, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -377,17 +378,40 @@ def live_hyprland_env() -> dict[str, str] | None:
     return environment
 
 
+def installed_plugin_repositories(environment: dict[str, str]) -> dict[str, str]:
+    """Map each installed hyprpm repository name to its author."""
+    output = run(["hyprpm", "list"], capture=True, env=environment).stdout
+    return dict(HYPRPM_REPOSITORY_RE.findall(output))
+
+
 def configure_plugins(profile: dict, environment: dict[str, str] | None) -> None:
     if environment is None:
         print("myarch: no running Hyprland instance; runtime plugin build is deferred", file=sys.stderr)
         return
-    run(["hyprpm", "update"], env=environment)
-    output = run(["hyprpm", "list"], capture=True, env=environment).stdout
-    plugins = [("https://github.com/sandwichfarm/hyprexpo", "hyprexpo")]
+    # Both plugins come from lukastk forks carrying one hyprpm.toml commit on
+    # top of upstream. hyprpm reads the plugin list from HEAD's manifest and
+    # then builds the commit pinned for the running Hyprland, so a fork must
+    # carry upstream's newest pins: .github/workflows/sync-plugin-forks.yml
+    # merges upstream daily and fails loudly on a conflict. Why each fork
+    # exists, and when to drop it, is in docs/plugin-forks.md.
+    # TODO(cleanup): drop the lukastk/hyprexpo fork (install.py URL back to sandwichfarm/hyprexpo, its .github/workflows/sync-plugin-forks.yml entry, its docs/plugin-forks.md section, then archive the fork) — once upstream's pin for the running Hyprland contains sandwichfarm/hyprexpo#137.
+    plugins = [("https://github.com/lukastk/hyprexpo", "hyprexpo")]
     if profile["plugins"]["hyprgrass"]:
-        plugins.append(("https://github.com/horriblename/hyprgrass", "hyprgrass"))
+        # TODO(cleanup): drop the lukastk/hyprgrass fork (install.py URL back to horriblename/hyprgrass, its .github/workflows/sync-plugin-forks.yml entry, its docs/plugin-forks.md section, then archive the fork) — once upstream's hyprpm.toml no longer lists hyprgrass-pulse or hyprgrass-backlight.
+        plugins.append(("https://github.com/lukastk/hyprgrass", "hyprgrass"))
+    # hyprpm identifies a repository as author/name, taking the author from its
+    # URL. One installed from another author's URL is removed BEFORE updating:
+    # it may be what makes the update fail, and `hyprpm add` refuses to run
+    # until an update has recorded the running Hyprland's ABI.
+    installed = installed_plugin_repositories(environment)
     for url, name in plugins:
-        if name not in output:
+        author = url.split("/")[-2]
+        if name in installed and installed[name] != author:
+            run(["hyprpm", "remove", f"{installed[name]}/{name}"], env=environment)
+    run(["hyprpm", "update"], env=environment)
+    installed = installed_plugin_repositories(environment)
+    for url, name in plugins:
+        if name not in installed:
             run(["hyprpm", "add", url], env=environment)
         run(["hyprpm", "enable", name], env=environment)
 

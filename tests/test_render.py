@@ -357,6 +357,65 @@ class RenderTests(unittest.TestCase):
         # The installer's stale-file cleanup recognises owned files by this text.
         self.assertIn(f'DISCLAIMER = "{module["DISCLAIMER"]}"', generator)
 
+    def test_plugin_repositories_are_reinstalled_when_their_author_changes(self) -> None:
+        module = runpy.run_path((ROOT / "install.py").as_posix(), run_name="__not_main__")
+        configure_plugins = module["configure_plugins"]
+
+        def listing(repositories: dict[str, str]) -> str:
+            # Shaped like real `hyprpm list` output, colour codes included.
+            return "".join(
+                f"\x1b[0m→\x1b[0m Repository {name} (by {author}):\n  │ Plugin {name}\n  └─ enabled: \x1b[32mtrue\n\x1b[0m\n"
+                for name, author in repositories.items()
+            )
+
+        def install(profile_name: str, repositories: dict[str, str]) -> list[list[str]]:
+            with (ROOT / "profiles" / f"{profile_name}.toml").open("rb") as stream:
+                profile = tomllib.load(stream)
+            calls: list[list[str]] = []
+
+            def fake_run(argv: list[str], *, check: bool = True, capture: bool = False, env: dict | None = None):
+                calls.append(argv)
+                if argv[:2] == ["hyprpm", "remove"]:
+                    del repositories[argv[2].split("/")[1]]
+                elif argv[:2] == ["hyprpm", "add"]:
+                    repositories[argv[2].split("/")[-1]] = argv[2].split("/")[-2]
+                stdout = listing(repositories) if argv == ["hyprpm", "list"] else ""
+                return subprocess.CompletedProcess(argv, 0, stdout=stdout)
+
+            configure_plugins.__globals__["run"] = fake_run
+            configure_plugins(profile, {})
+            return calls
+
+        repositories = {"hyprgrass": "horriblename", "hyprexpo": "sandwichfarm"}
+        calls = install("pocket4", repositories)
+        update = calls.index(["hyprpm", "update"])
+        for stale, url in (
+            ("horriblename/hyprgrass", "https://github.com/lukastk/hyprgrass"),
+            ("sandwichfarm/hyprexpo", "https://github.com/lukastk/hyprexpo"),
+        ):
+            # A stale repository goes before the update it would otherwise fail.
+            self.assertLess(calls.index(["hyprpm", "remove", stale]), update)
+            self.assertLess(update, calls.index(["hyprpm", "add", url]))
+        self.assertEqual({"hyprgrass": "lukastk", "hyprexpo": "lukastk"}, repositories)
+
+        rerun = install("pocket4", repositories)
+        self.assertEqual([], [argv for argv in rerun if argv[1] in ("remove", "add")])
+        self.assertIn(["hyprpm", "enable", "hyprgrass"], rerun)
+
+        ideapad = install("ideapad", {"hyprexpo": "sandwichfarm"})
+        self.assertIn(["hyprpm", "add", "https://github.com/lukastk/hyprexpo"], ideapad)
+        self.assertFalse([argv for argv in ideapad if "hyprgrass" in " ".join(argv)])
+
+    def test_every_plugin_fork_is_synced_from_upstream(self) -> None:
+        # A fork that stops receiving upstream's commit pins builds the wrong
+        # source after the next Hyprland update.
+        forks = set(re.findall(r'"https://github\.com/(lukastk/[\w-]+)"', (ROOT / "install.py").read_text()))
+        self.assertEqual({"lukastk/hyprexpo", "lukastk/hyprgrass"}, forks)
+        workflow = (ROOT / ".github/workflows/sync-plugin-forks.yml").read_text()
+        for fork in forks:
+            self.assertIn(f"repo: {fork}\n", workflow)
+        self.assertIn("timeout-minutes:", workflow)
+
     def test_audio_input_picker_uses_pipewire_sources(self) -> None:
         picker_path = ROOT / "home/.mybin/audio-input"
         picker = picker_path.read_text()

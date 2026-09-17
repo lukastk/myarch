@@ -12,7 +12,7 @@
 6. writes an installed-file manifest and removes only stale files it can prove myarch owns;
 7. configures keyd, Bluetooth, NTP, and font caches;
 8. validates/install external profile contracts;
-9. updates, adds, and enables ABI-locked Hyprpm plugins;
+9. updates, adds, and enables ABI-locked Hyprpm plugins, reinstalling any whose source repository changed (both currently come from forks; see [`plugin-forks.md`](plugin-forks.md));
 10. restores Hyprland's prior reload/error settings, performs one reload, and restarts Waybar/Mako.
 
 There is no compatibility namespace for Omarchy. myarch commands and state are native.
