@@ -48,3 +48,15 @@ Every commit message must be a prompt another agent can use to recreate the work
 ## Temporary migrations
 
 Any explicitly agreed temporary path must carry the exact `TODO(cleanup):` tag at every cleanup site and state a concrete removal event/date.
+
+## Scheduled review: plugin forks and their sync (due 2026-11-02)
+
+Since 2026-09-17, hyprexpo and hyprgrass have been installed from temporary `lukastk` forks. `.github/workflows/sync-plugin-forks.yml` keeps them current, using `PLUGIN_FORK_SYNC_TOKEN`, a copy of the account-wide GitHub token. Why each fork exists and when it can go: `docs/plugin-forks.md`.
+
+**On or after 2026-11-02, bring this review up with Lukas near the start of any session in this repo**, whatever the session is about, until he has decided and this section has been updated or removed. Before that date, raise it only if the sync job is failing or the work touches hyprpm plugins.
+
+For the review:
+- Run each fork's drop check from `docs/plugin-forks.md` and say which forks can already go back to upstream.
+- Summarise the recent sync runs (`gh run list -R lukastk/myarch --workflow sync-plugin-forks.yml`): how often they failed, and why.
+- Ask whether to keep the forks and the automation, narrow the token to a fine-grained one, or drop them.
+- Decision notes are in the myvault pad `pad/Revisit myarch's hyprpm plugin forks.md`. The matching task (📅 2026-11-02) is in the planner note `pln/2026-09-17.md`; mark it done when the review is finished.
