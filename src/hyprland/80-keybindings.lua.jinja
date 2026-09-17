@@ -6,16 +6,57 @@
 
 local mainMod = "SUPER"
 
+-- Every binding goes through `bind()` rather than `hl.bind()` so its action is
+-- also recorded under its chord. That is what lets `myarch keys` — the
+-- catalogue behind Super+R -> Keybindings — RUN the row you pick: in tablet mode
+-- the keyboard is folded away, so a list of chords you cannot press is a dead
+-- end. `hyprctl eval` shares this Lua state, so `myarch keys` calls
+-- `myarch_run_bind("SUPER+R")` and Hyprland runs the very function the key runs.
+-- No second copy of any action, so nothing can drift.
+--
+-- `myarch_binds` and `myarch_run_bind` are GLOBAL on purpose: a local would not
+-- survive to the next `hyprctl eval`. Chords are normalised (upper-cased, spaces
+-- removed) because the catalogue writes "Super+Shift+S" and the config writes
+-- "SUPER + SHIFT + S".
+myarch_binds = {}
+
+local function chordKey(chord)
+    return (chord:upper():gsub("%s+", ""))
+end
+
+local function bind(chord, action, flags)
+    myarch_binds[chordKey(chord)] = action
+    if flags == nil then
+        hl.bind(chord, action)
+    else
+        hl.bind(chord, action, flags)
+    end
+end
+
+-- An unknown chord means the catalogue and the binds have drifted, which is a
+-- bug worth seeing rather than a silent no-op.
+function myarch_run_bind(chord)
+    local action = myarch_binds[chordKey(chord)]
+    if action == nil then
+        error("myarch_run_bind: no binding for " .. chord)
+    end
+    if type(action) == "function" then
+        action()
+    else
+        hl.dispatch(action)
+    end
+end
+
 -- --- Launch / session ---
-hl.bind(mainMod .. " + Q",      hl.dsp.exec_cmd(terminal))
-hl.bind(mainMod .. " + Return", hl.dsp.exec_cmd(terminal))
+bind(mainMod .. " + Q",      hl.dsp.exec_cmd(terminal))
+bind(mainMod .. " + Return", hl.dsp.exec_cmd(terminal))
 -- Popup terminal (float; ≙ the mac quake-style iTerm)
-hl.bind(mainMod .. " + T",      hl.dsp.exec_cmd(terminal, { float = true, size = "60% 60%", center = true }))
-hl.bind(mainMod .. " + E",      hl.dsp.exec_cmd(fileManager))
-hl.bind(mainMod .. " + R",      hl.dsp.exec_cmd(menu))
-hl.bind(mainMod .. " + ALT + SPACE", hl.dsp.exec_cmd("fuzzel"))
-hl.bind(mainMod .. " + C",      hl.dsp.window.close())
-hl.bind(mainMod .. " + M",      hl.dsp.exec_cmd("uwsm stop"))
+bind(mainMod .. " + T",      hl.dsp.exec_cmd(terminal, { float = true, size = "60% 60%", center = true }))
+bind(mainMod .. " + E",      hl.dsp.exec_cmd(fileManager))
+bind(mainMod .. " + R",      hl.dsp.exec_cmd(menu))
+bind(mainMod .. " + ALT + SPACE", hl.dsp.exec_cmd("fuzzel"))
+bind(mainMod .. " + C",      hl.dsp.window.close())
+bind(mainMod .. " + M",      hl.dsp.exec_cmd("uwsm stop"))
 
 -- Connectivity TUIs, preferred over the nm-applet/blueman tray icons (which are
 -- also fiddly to hit on a touch panel). N for network; SHIFT for the other
@@ -30,15 +71,15 @@ hl.bind(mainMod .. " + M",      hl.dsp.exec_cmd("uwsm stop"))
 -- every encrypted profile (A2DP/HFP) fails and no audio arrives. bluetui lists
 -- paired/trusted/connected separately, so that state is visible rather than
 -- silent.
-hl.bind(mainMod .. " + N", hl.dsp.exec_cmd(
+bind(mainMod .. " + N", hl.dsp.exec_cmd(
     terminal .. " --app-id=net-tui " .. termCells(64, 40) .. " -e nmtui"))
-hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd(
+bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd(
     terminal .. " --app-id=bt-tui " .. termCells(64, 40) .. " -e bluetui"))
 -- The PipeWire default source is independent from the default output, so a
 -- Bluetooth headset can remain the speaker while its broken/poor microphone is
 -- replaced by the laptop microphone. The current source is the initially
 -- highlighted fzf row.
-hl.bind(mainMod .. " + CTRL + I", hl.dsp.exec_cmd(
+bind(mainMod .. " + CTRL + I", hl.dsp.exec_cmd(
     terminal .. " --app-id=audio-input-pick " .. termCells(72, 16) ..
     " -e {{ home }}/.mybin/audio-input"))
 {% if 'pocket4' in targets %}
@@ -47,7 +88,7 @@ hl.bind(mainMod .. " + CTRL + I", hl.dsp.exec_cmd(
 -- the current quiet/chill/balanced/performance mode for random-access selection.
 -- Like the input picker above, fzf needs a TTY, a compact character-cell-sized
 -- terminal, and a dedicated app-id so the window rule can float it.
-hl.bind(mainMod .. " + CTRL + P", hl.dsp.exec_cmd(
+bind(mainMod .. " + CTRL + P", hl.dsp.exec_cmd(
     terminal .. " --app-id=thermal-mode-pick " .. termCells(72, 10) ..
     " -e {{ home }}/.mybin/pocket4-thermal-mode pick"))
 {% endif %}
@@ -78,7 +119,7 @@ hl.bind(mainMod .. " + CTRL + P", hl.dsp.exec_cmd(
 local armSeq = 0
 local armedSeq = nil
 
-hl.bind(mainMod .. " + SHIFT + R", function()
+bind(mainMod .. " + SHIFT + R", function()
     armSeq = armSeq + 1
     local mySeq = armSeq
     armedSeq = mySeq
@@ -108,38 +149,38 @@ hl.on("window.open", function(win)
 end)
 
 -- --- Focus ---
-hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }))
-hl.bind(mainMod .. " + right", hl.dsp.focus({ direction = "right" }))
-hl.bind(mainMod .. " + up",    hl.dsp.focus({ direction = "up" }))
-hl.bind(mainMod .. " + down",  hl.dsp.focus({ direction = "down" }))
-hl.bind(mainMod .. " + bracketleft",  hl.dsp.focus({ monitor = "-1" }))
-hl.bind(mainMod .. " + bracketright", hl.dsp.focus({ monitor = "+1" }))
+bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }))
+bind(mainMod .. " + right", hl.dsp.focus({ direction = "right" }))
+bind(mainMod .. " + up",    hl.dsp.focus({ direction = "up" }))
+bind(mainMod .. " + down",  hl.dsp.focus({ direction = "down" }))
+bind(mainMod .. " + bracketleft",  hl.dsp.focus({ monitor = "-1" }))
+bind(mainMod .. " + bracketright", hl.dsp.focus({ monitor = "+1" }))
 
 -- --- Arrange (the tiling idiom: move within the split, nudge ratios) ---
-hl.bind(mainMod .. " + SHIFT + left",  hl.dsp.window.move({ direction = "left" }))
-hl.bind(mainMod .. " + SHIFT + right", hl.dsp.window.move({ direction = "right" }))
-hl.bind(mainMod .. " + SHIFT + up",    hl.dsp.window.move({ direction = "up" }))
-hl.bind(mainMod .. " + SHIFT + down",  hl.dsp.window.move({ direction = "down" }))
-hl.bind(mainMod .. " + SHIFT + bracketleft",  hl.dsp.window.move({ monitor = "-1" }))
-hl.bind(mainMod .. " + SHIFT + bracketright", hl.dsp.window.move({ monitor = "+1" }))
+bind(mainMod .. " + SHIFT + left",  hl.dsp.window.move({ direction = "left" }))
+bind(mainMod .. " + SHIFT + right", hl.dsp.window.move({ direction = "right" }))
+bind(mainMod .. " + SHIFT + up",    hl.dsp.window.move({ direction = "up" }))
+bind(mainMod .. " + SHIFT + down",  hl.dsp.window.move({ direction = "down" }))
+bind(mainMod .. " + SHIFT + bracketleft",  hl.dsp.window.move({ monitor = "-1" }))
+bind(mainMod .. " + SHIFT + bracketright", hl.dsp.window.move({ monitor = "+1" }))
 
 -- Split nudging (hold to repeat)
-hl.bind(mainMod .. " + minus",         hl.dsp.window.resize({ x = -50, y = 0, relative = true }), { repeating = true })
-hl.bind(mainMod .. " + equal",         hl.dsp.window.resize({ x = 50,  y = 0, relative = true }), { repeating = true })
-hl.bind(mainMod .. " + SHIFT + minus", hl.dsp.window.resize({ x = 0, y = -50, relative = true }), { repeating = true })
-hl.bind(mainMod .. " + SHIFT + equal", hl.dsp.window.resize({ x = 0, y = 50,  relative = true }), { repeating = true })
+bind(mainMod .. " + minus",         hl.dsp.window.resize({ x = -50, y = 0, relative = true }), { repeating = true })
+bind(mainMod .. " + equal",         hl.dsp.window.resize({ x = 50,  y = 0, relative = true }), { repeating = true })
+bind(mainMod .. " + SHIFT + minus", hl.dsp.window.resize({ x = 0, y = -50, relative = true }), { repeating = true })
+bind(mainMod .. " + SHIFT + equal", hl.dsp.window.resize({ x = 0, y = 50,  relative = true }), { repeating = true })
 
 -- Maximize (daily driver; stays in the layout) / true fullscreen (hides bar)
-hl.bind(mainMod .. " + F",         hl.dsp.window.fullscreen({ mode = "maximized" }))
-hl.bind(mainMod .. " + SHIFT + F", hl.dsp.window.fullscreen({ mode = "fullscreen" }))
+bind(mainMod .. " + F",         hl.dsp.window.fullscreen({ mode = "maximized" }))
+bind(mainMod .. " + SHIFT + F", hl.dsp.window.fullscreen({ mode = "fullscreen" }))
 
-hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())
-hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit")) -- dwindle only
+bind(mainMod .. " + P", hl.dsp.window.pseudo())
+bind(mainMod .. " + J", hl.dsp.layout("togglesplit")) -- dwindle only
 
 -- --- Floats (the only float-makers) ---
-hl.bind(mainMod .. " + SHIFT + V", hl.dsp.window.float({ action = "toggle" }))
+bind(mainMod .. " + SHIFT + V", hl.dsp.window.float({ action = "toggle" }))
 -- Center the focused window as a float
-hl.bind(mainMod .. " + Z", function()
+bind(mainMod .. " + Z", function()
     local mon = hl.get_active_monitor()
     if not mon then
         return
@@ -172,8 +213,8 @@ for _, bank in ipairs(wsBanks) do
     for i = 1, 5 do
         local ws  = tostring(bank.base + i)
         local key = bank.keycodes and ("code:" .. (9 + i)) or tostring(i)
-        hl.bind(bank.mods .. " + " .. key,         hl.dsp.focus({ workspace = ws }))
-        hl.bind(bank.mods .. " + SHIFT + " .. key, hl.dsp.window.move({ workspace = ws }))
+        bind(bank.mods .. " + " .. key,         hl.dsp.focus({ workspace = ws }))
+        bind(bank.mods .. " + SHIFT + " .. key, hl.dsp.window.move({ workspace = ws }))
     end
 end
 
@@ -181,19 +222,19 @@ end
 -- convention; costs nothing, conflicts with nothing)
 for i = 6, 10 do
     local key = i % 10 -- 10 maps to key 0
-    hl.bind(mainMod .. " + " .. key,         hl.dsp.focus({ workspace = tostring(i) }))
-    hl.bind(mainMod .. " + SHIFT + " .. key, hl.dsp.window.move({ workspace = tostring(i) }))
+    bind(mainMod .. " + " .. key,         hl.dsp.focus({ workspace = tostring(i) }))
+    bind(mainMod .. " + SHIFT + " .. key, hl.dsp.window.move({ workspace = tostring(i) }))
 end
 
 -- Previous/Next workspace; +Shift moves the window along
-hl.bind(mainMod .. " + comma",          hl.dsp.focus({ workspace = "e-1" }))
-hl.bind(mainMod .. " + period",         hl.dsp.focus({ workspace = "e+1" }))
-hl.bind(mainMod .. " + SHIFT + comma",  hl.dsp.window.move({ workspace = "e-1" }))
-hl.bind(mainMod .. " + SHIFT + period", hl.dsp.window.move({ workspace = "e+1" }))
+bind(mainMod .. " + comma",          hl.dsp.focus({ workspace = "e-1" }))
+bind(mainMod .. " + period",         hl.dsp.focus({ workspace = "e+1" }))
+bind(mainMod .. " + SHIFT + comma",  hl.dsp.window.move({ workspace = "e-1" }))
+bind(mainMod .. " + SHIFT + period", hl.dsp.window.move({ workspace = "e+1" }))
 
 -- Workspace choosers (fuzzel; covers 11–15 and the named overview)
-hl.bind(mainMod .. " + W",           hl.dsp.exec_cmd("~/.mybin/hypr-ws-chooser"))
-hl.bind(mainMod .. " + SHIFT + W",   hl.dsp.exec_cmd("~/.mybin/hypr-ws-chooser --move"))
+bind(mainMod .. " + W",           hl.dsp.exec_cmd("~/.mybin/hypr-ws-chooser"))
+bind(mainMod .. " + SHIFT + W",   hl.dsp.exec_cmd("~/.mybin/hypr-ws-chooser --move"))
 
 -- Overview (hyprexpo) — the same "pick a space" job as the fuzzel chooser above,
 -- but visual: a 3x3 grid of live workspace previews, click or tap to select.
@@ -204,7 +245,7 @@ hl.bind(mainMod .. " + SHIFT + W",   hl.dsp.exec_cmd("~/.mybin/hypr-ws-chooser -
 -- `cancel_key`).
 -- Kept ALONGSIDE the fuzzel chooser rather than replacing it: the chooser also
 -- does --move (send window to workspace), which the overview does not.
-hl.bind(mainMod .. " + G", function()
+bind(mainMod .. " + G", function()
     if hl.plugin.hyprexpo ~= nil then
         hl.plugin.hyprexpo.expo("toggle")
     end
@@ -215,32 +256,32 @@ end)
 -- latch until the next press; Super+Escape cancels. Voxtype remains responsible
 -- for capture, transcription, profiles and output; voxtype-key only translates
 -- compositor edges and preserves the Pocket microphone-volume transaction.
-hl.bind(mainMod .. " + D",          hl.dsp.exec_cmd("{{ home }}/.mybin/voxtype-key key down"))
-hl.bind(mainMod .. " + D",          hl.dsp.exec_cmd("{{ home }}/.mybin/voxtype-key key up"), { release = true })
-hl.bind(mainMod .. " + Escape",     hl.dsp.exec_cmd("{{ home }}/.mybin/voxtype-key cancel"))
+bind(mainMod .. " + D",          hl.dsp.exec_cmd("{{ home }}/.mybin/voxtype-key key down"))
+bind(mainMod .. " + D",          hl.dsp.exec_cmd("{{ home }}/.mybin/voxtype-key key up"), { release = true })
+bind(mainMod .. " + Escape",     hl.dsp.exec_cmd("{{ home }}/.mybin/voxtype-key cancel"))
 -- Switch the dictation already in progress between Voxtype's cleanup and raw
 -- profiles. The latest profile selection is consumed when transcription starts.
-hl.bind(mainMod .. " + ALT + D",    hl.dsp.exec_cmd("{{ home }}/.mybin/voxtype-key cleanup toggle"))
+bind(mainMod .. " + ALT + D",    hl.dsp.exec_cmd("{{ home }}/.mybin/voxtype-key cleanup toggle"))
 -- Same hold/tap gesture, with the Anthropic cleanup profile selected at start.
-hl.bind(mainMod .. " + SHIFT + D",  hl.dsp.exec_cmd("{{ home }}/.mybin/voxtype-key key down --cleanup"))
-hl.bind(mainMod .. " + SHIFT + D",  hl.dsp.exec_cmd("{{ home }}/.mybin/voxtype-key key up"), { release = true })
+bind(mainMod .. " + SHIFT + D",  hl.dsp.exec_cmd("{{ home }}/.mybin/voxtype-key key down --cleanup"))
+bind(mainMod .. " + SHIFT + D",  hl.dsp.exec_cmd("{{ home }}/.mybin/voxtype-key key up"), { release = true })
 -- Voxtype's configuration TUI. It needs a terminal and receives a dedicated
 -- app-id so the transient settings surface floats instead of reflowing the grid.
-hl.bind(mainMod .. " + CTRL + D",   hl.dsp.exec_cmd(
+bind(mainMod .. " + CTRL + D",   hl.dsp.exec_cmd(
     terminal .. " --app-id=voxtype-settings " .. termCells(76, 42) ..
     " -e {{ home }}/.mybin/voxtype-key settings"))
 
 -- Special workspace (scratchpad)
-hl.bind(mainMod .. " + S",         hl.dsp.workspace.toggle_special("magic"))
-hl.bind(mainMod .. " + ALT + S",   hl.dsp.window.move({ workspace = "special:magic" }))
+bind(mainMod .. " + S",         hl.dsp.workspace.toggle_special("magic"))
+bind(mainMod .. " + ALT + S",   hl.dsp.window.move({ workspace = "special:magic" }))
 
 -- Scroll through existing workspaces with mainMod + scroll
-hl.bind(mainMod .. " + mouse_down", hl.dsp.focus({ workspace = "e+1" }))
-hl.bind(mainMod .. " + mouse_up",   hl.dsp.focus({ workspace = "e-1" }))
+bind(mainMod .. " + mouse_down", hl.dsp.focus({ workspace = "e+1" }))
+bind(mainMod .. " + mouse_up",   hl.dsp.focus({ workspace = "e-1" }))
 
 -- Move/resize windows with mainMod + LMB/RMB and dragging
-hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true })
-hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
+bind(mainMod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true })
+bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
 
 -- --- Utilities ---
 -- Clipboard history picker (≙ Maccy). cliphist's order is newest-first and
@@ -248,13 +289,13 @@ hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
 -- its dmenu frecency cache reordering entries by past picks; fuzzel keeps no
 -- cache in dmenu mode unless --cache is passed, so the guard is gone rather
 -- than translated.
-hl.bind(mainMod .. " + V", hl.dsp.exec_cmd("cliphist list | fuzzel --dmenu | cliphist decode | wl-copy"))
+bind(mainMod .. " + V", hl.dsp.exec_cmd("cliphist list | fuzzel --dmenu | cliphist decode | wl-copy"))
 
 -- myarch capture workflows: save+clipboard, frozen region selection, OCR/QR,
 -- colour picking, and recording are all available from the capture menu.
-hl.bind("Print", hl.dsp.exec_cmd("{{ home }}/.mybin/myarch capture screenshot fullscreen"))
-hl.bind(mainMod .. " + SHIFT + S", hl.dsp.exec_cmd("{{ home }}/.mybin/myarch capture screenshot region"))
-hl.bind(mainMod .. " + CTRL + S", hl.dsp.exec_cmd("{{ home }}/.mybin/myarch capture menu"))
+bind("Print", hl.dsp.exec_cmd("{{ home }}/.mybin/myarch capture screenshot fullscreen"))
+bind(mainMod .. " + SHIFT + S", hl.dsp.exec_cmd("{{ home }}/.mybin/myarch capture screenshot region"))
+bind(mainMod .. " + CTRL + S", hl.dsp.exec_cmd("{{ home }}/.mybin/myarch capture menu"))
 
 -- Wallpaper (B for background). Super+B jumps to a new random one, Shift for
 -- the chooser — the same variant convention as W/Shift+W above. Either way the
@@ -262,7 +303,7 @@ hl.bind(mainMod .. " + CTRL + S", hl.dsp.exec_cmd("{{ home }}/.mybin/myarch capt
 -- "Wallpapers". Absolute path because Hyprland spawns binds from the login
 -- environment, which does not have ~/.mybin on PATH (same reason as the
 -- dictation binds).
-hl.bind(mainMod .. " + B", hl.dsp.exec_cmd("{{ home }}/.mybin/wallpaper next"))
+bind(mainMod .. " + B", hl.dsp.exec_cmd("{{ home }}/.mybin/wallpaper next"))
 -- `pick` runs fzf, which needs a TTY — a bare exec has none, so it goes in a
 -- terminal. `-e` is xterm-compatibility on foot (documented as "ignored") and
 -- the real thing on kitty, so one spelling covers both machines. 40 rows so the
@@ -274,7 +315,7 @@ hl.bind(mainMod .. " + B", hl.dsp.exec_cmd("{{ home }}/.mybin/wallpaper next"))
 -- window covers it. Hyprland's blur `xray` (which makes floating windows
 -- ignore TILED windows) does not change that: with it on, a tiled terminal
 -- behind the picker was still legible through it.
-hl.bind(mainMod .. " + SHIFT + B", hl.dsp.exec_cmd(
+bind(mainMod .. " + SHIFT + B", hl.dsp.exec_cmd(
     terminal .. " --app-id=wallpaper-pick " .. termCells(64, 40) .. " " .. termAlpha ..
     " -e {{ home }}/.mybin/wallpaper pick"))
 
@@ -289,7 +330,7 @@ hl.bind(mainMod .. " + SHIFT + B", hl.dsp.exec_cmd(
 -- that happens there is no bar left to click and no other way back short of
 -- typing the launcher into a terminal. Recovery should not require remembering
 -- that `waybar` is the wrong command to type (see restart-bar).
-hl.bind(mainMod .. " + CTRL + B", hl.dsp.exec_cmd("{{ home }}/.mybin/restart-bar"))
+bind(mainMod .. " + CTRL + B", hl.dsp.exec_cmd("{{ home }}/.mybin/restart-bar"))
 
 -- Monitor layout (O for output). Super+O steps through extend → external →
 -- internal; Super+Shift+O toggles MIRROR on and off. Same plain/Shift variant
@@ -310,8 +351,8 @@ hl.bind(mainMod .. " + CTRL + B", hl.dsp.exec_cmd("{{ home }}/.mybin/restart-bar
 -- off the edge of a fullscreen game). A MIRRORED output is still its own
 -- monitor to Hyprland, so XWayland still sees two and the bug stands. See the
 -- header of ~/.mybin/display-mode.
-hl.bind(mainMod .. " + O",           hl.dsp.exec_cmd("{{ home }}/.mybin/display-mode cycle"))
-hl.bind(mainMod .. " + SHIFT + O",   hl.dsp.exec_cmd("{{ home }}/.mybin/display-mode mirror-toggle"))
+bind(mainMod .. " + O",           hl.dsp.exec_cmd("{{ home }}/.mybin/display-mode cycle"))
+bind(mainMod .. " + SHIFT + O",   hl.dsp.exec_cmd("{{ home }}/.mybin/display-mode mirror-toggle"))
 
 -- Pause the screen (P for pause): blacks the panel out for N minutes, and any
 -- keypress brings it back. Super+P is dwindle's `pseudo`, so this takes the
@@ -331,15 +372,15 @@ hl.bind(mainMod .. " + SHIFT + O",   hl.dsp.exec_cmd("{{ home }}/.mybin/display-
 -- 10 rows is what that whole transcript needs — two header lines, the answer,
 -- `pause`'s own two lines, and the close prompt — without scrolling any of it
 -- off the top.
-hl.bind(mainMod .. " + SHIFT + P", hl.dsp.exec_cmd(
+bind(mainMod .. " + SHIFT + P", hl.dsp.exec_cmd(
     terminal .. " --app-id=pause-prompt " .. termCells(56, 10) ..
     " -e {{ home }}/.mybin/pause-prompt"))
 
 -- Laptop multimedia keys for volume, LCD brightness, and keyboard lighting.
-hl.bind("XF86AudioRaiseVolume",  hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), { locked = true, repeating = true })
-hl.bind("XF86AudioLowerVolume",  hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),      { locked = true, repeating = true })
-hl.bind("XF86AudioMute",         hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),     { locked = true, repeating = true })
-hl.bind("XF86AudioMicMute",      hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"),   { locked = true, repeating = true })
+bind("XF86AudioRaiseVolume",  hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), { locked = true, repeating = true })
+bind("XF86AudioLowerVolume",  hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),      { locked = true, repeating = true })
+bind("XF86AudioMute",         hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),     { locked = true, repeating = true })
+bind("XF86AudioMicMute",      hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"),   { locked = true, repeating = true })
 -- Brightness goes through ~/.mybin/brightness rather than straight to
 -- brightnessctl, because the backlight alone bottoms out at a floor that is
 -- still visibly lit (raw 2 of 64764, and raw 0 is no darker — it is why `pause`
@@ -347,23 +388,23 @@ hl.bind("XF86AudioMicMute",      hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_
 -- floor with hyprsunset's gamma ramp, so the screen keeps getting darker while
 -- staying readable. Absolute path: Hyprland spawns binds from the login
 -- environment, which has no ~/.mybin on PATH (same as the dictation binds).
-hl.bind("XF86MonBrightnessUp",   hl.dsp.exec_cmd("{{ home }}/.mybin/brightness up"),   { locked = true, repeating = true })
-hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("{{ home }}/.mybin/brightness down"), { locked = true, repeating = true })
+bind("XF86MonBrightnessUp",   hl.dsp.exec_cmd("{{ home }}/.mybin/brightness up"),   { locked = true, repeating = true })
+bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("{{ home }}/.mybin/brightness down"), { locked = true, repeating = true })
 
 -- Standard keyboard-light events delegate to the generic LED-class authority.
 -- The Pocket 4's Fn+Space never emits one: its keyboard MCU owns three modes and
 -- is intentionally left to that physical shortcut rather than given a fake OS
 -- state. On hardware such as the IdeaPad, the helper discovers and updates the
 -- kernel's *:kbd_backlight device through brightnessctl.
-hl.bind("XF86KbdBrightnessUp",   hl.dsp.exec_cmd("{{ home }}/.mybin/keyboard-backlight up"),    { locked = true, repeating = true })
-hl.bind("XF86KbdBrightnessDown", hl.dsp.exec_cmd("{{ home }}/.mybin/keyboard-backlight down"),  { locked = true, repeating = true })
-hl.bind("XF86KbdLightOnOff",     hl.dsp.exec_cmd("{{ home }}/.mybin/keyboard-backlight cycle"), { locked = true })
+bind("XF86KbdBrightnessUp",   hl.dsp.exec_cmd("{{ home }}/.mybin/keyboard-backlight up"),    { locked = true, repeating = true })
+bind("XF86KbdBrightnessDown", hl.dsp.exec_cmd("{{ home }}/.mybin/keyboard-backlight down"),  { locked = true, repeating = true })
+bind("XF86KbdLightOnOff",     hl.dsp.exec_cmd("{{ home }}/.mybin/keyboard-backlight cycle"), { locked = true })
 
 -- Requires playerctl
-hl.bind("XF86AudioNext",  hl.dsp.exec_cmd("playerctl next"),       { locked = true })
-hl.bind("XF86AudioPause", hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
-hl.bind("XF86AudioPlay",  hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
-hl.bind("XF86AudioPrev",  hl.dsp.exec_cmd("playerctl previous"),   { locked = true })
+bind("XF86AudioNext",  hl.dsp.exec_cmd("playerctl next"),       { locked = true })
+bind("XF86AudioPause", hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
+bind("XF86AudioPlay",  hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
+bind("XF86AudioPrev",  hl.dsp.exec_cmd("playerctl previous"),   { locked = true })
 
 -- Lid switch → internal panel off/on. In server mode (the ideapad boot
 -- default; see AGENTS.md "ideapad server mode") a closed lid doesn't suspend,
@@ -371,5 +412,5 @@ hl.bind("XF86AudioPrev",  hl.dsp.exec_cmd("playerctl previous"),   { locked = tr
 -- hypridle's 15-min screen-off. Scoped to eDP-1 so a docked external monitor
 -- is unaffected; `locked` because the machine usually sits on hyprlock.
 -- (switch "on" = lid closed, "off" = lid opened.)
-hl.bind("switch:on:Lid Switch",  hl.dsp.dpms({ action = "off", monitor = "eDP-1" }), { locked = true })
-hl.bind("switch:off:Lid Switch", hl.dsp.dpms({ action = "on",  monitor = "eDP-1" }), { locked = true })
+bind("switch:on:Lid Switch",  hl.dsp.dpms({ action = "off", monitor = "eDP-1" }), { locked = true })
+bind("switch:off:Lid Switch", hl.dsp.dpms({ action = "on",  monitor = "eDP-1" }), { locked = true })

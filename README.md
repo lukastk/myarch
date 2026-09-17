@@ -91,7 +91,7 @@ myarch capture record [--fullscreen] [--audio none|desktop|microphone|both]
 myarch capture stop
 ```
 
-Important keybindings include `Super+R` (myarch menu), `Super+Alt+Space` (applications), `Super+G` (overview), `Super+D` (dictation), `Super+V` (clipboard history), Print / `Super+Shift+S` (screenshots), and `Super+Ctrl+S` (capture menu). The complete catalogue is in [`docs/keybindings.tsv`](docs/keybindings.tsv) and available through `myarch keys`.
+Important keybindings include `Super+R` (myarch menu), `Super+Alt+Space` (applications), `Super+G` (overview), `Super+D` (dictation), `Super+V` (clipboard history), Print / `Super+Shift+S` (screenshots), and `Super+Ctrl+S` (capture menu). The complete catalogue is in [`docs/keybindings.tsv`](docs/keybindings.tsv) and available through `myarch keys`, which also RUNS the row you pick — the same action the key runs, so the list works with the keyboard folded away. Rows describing a family of chords (`Super+1…5`) or hardware keys say so instead.
 
 ## Repository layout
 

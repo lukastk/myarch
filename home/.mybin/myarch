@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import subprocess
@@ -78,12 +79,57 @@ def command_menu() -> None:
         entries[choice]()
 
 
+# Catalogue chords are written for a human ("Super+Shift+S", "Super+["); the
+# Hyprland config writes xkb names. Both sides are upper-cased and stripped of
+# spaces, and these map what is left. See `bind()` in
+# src/hyprland/80-keybindings.lua.jinja.
+CHORD_KEY_NAMES = {
+    "ENTER": "RETURN", "[": "BRACKETLEFT", "]": "BRACKETRIGHT",
+    "-": "MINUS", "=": "EQUAL", ",": "COMMA", ".": "PERIOD",
+}
+# Rows that describe a FAMILY of chords ("Super+1…5") or keys Hyprland binds by
+# their own name (XF86…, the Pocket's firmware Fn+Space) — nothing to run.
+CHORD_FAMILY_MARKERS = ("…", "ARROW", "XF86", "FN+", "ADDSHIFT")
+
+
+def chord_key(chord: str) -> str | None:
+    """The `myarch_binds` key for a catalogue chord, or None when the row is a family.
+
+    A row listing alternatives ("Super+Q / Super+Enter") runs the first one.
+    """
+    primary = chord.split(" / ")[0]
+    token = primary.upper().replace(" ", "")
+    if any(marker in token for marker in CHORD_FAMILY_MARKERS):
+        return None
+    parts = [CHORD_KEY_NAMES.get(part, part) for part in token.split("+") if part]
+    key = "+".join(parts)
+    # The key is interpolated into a Lua expression below, so it must be inert.
+    return key if re.fullmatch(r"[A-Z0-9+]+", key) else None
+
+
 def keys() -> None:
     source = REPO / "docs/keybindings.tsv"
     if not source.is_file():
         raise SystemExit(f"missing keybinding catalogue: {source}")
-    labels = [line.rstrip("\n").replace("\t", "   ") for line in source.read_text().splitlines() if line and not line.startswith("#")]
-    select("Keybindings", labels)
+    rows = [line.rstrip("\n").split("\t", 1) for line in source.read_text().splitlines() if line and not line.startswith("#")]
+    labels = ["   ".join(row) for row in rows]
+    choice = select("Keybindings", labels)
+    if choice is None:
+        return
+    chord = rows[labels.index(choice)][0]
+    key = chord_key(chord)
+    if key is None:
+        # Nothing to run, but say so rather than looking broken.
+        run(["notify-send", "myarch keybindings", f"{chord} is a family of keys — press it on the keyboard"], check=False)
+        return
+    # Hyprland runs the binding's own function: `hyprctl eval` shares the Lua
+    # state the config was parsed in, where `bind()` recorded every action.
+    result = run(["hyprctl", "eval", f'myarch_run_bind("{key}")'], check=False, capture=True)
+    failure = result.stderr.strip() or (result.stdout.strip() if "error" in result.stdout.lower() else "")
+    if result.returncode != 0 or failure:
+        message = failure or f"hyprctl eval exited {result.returncode}"
+        run(["notify-send", "--urgency=critical", "myarch keybindings", f"{chord} did not run: {message}"], check=False)
+        raise SystemExit(message)
 
 
 def theme_names() -> list[str]:

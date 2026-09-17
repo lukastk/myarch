@@ -289,6 +289,33 @@ class RenderTests(unittest.TestCase):
                 if key not in {"name", "palette"}:
                     self.assertRegex(value, r"^#[0-9a-fA-F]{6}$")
 
+    def test_catalogue_chords_resolve_to_a_registered_bind(self) -> None:
+        """`myarch keys` runs the row you pick, by looking its chord up in myarch_binds.
+
+        A renamed or retired bind would turn a catalogue row into a runtime error
+        (myarch_run_bind raises on an unknown chord), so the two are checked here
+        instead: every runnable chord in the catalogue must be a chord the config
+        binds.
+        """
+        myarch = runpy.run_path((ROOT / "home/.mybin/myarch").as_posix(), run_name="__not_main__")
+        source = self.env.from_string((ROOT / "src/hyprland/80-keybindings.lua.jinja").read_text()).render(**self.context("pocket4"))
+        bound = set()
+        for expression in re.findall(r"(?m)^\s*bind\(\s*([^,]+),", source):
+            expression = expression.replace("mainMod", '"SUPER"').strip()
+            # Chords built from a loop variable (the workspace banks) are dynamic; the
+            # catalogue lists those as families, which are not runnable anyway.
+            pieces = [piece.strip() for piece in expression.split("..")]
+            if not all(re.fullmatch(r'"[^"]*"', piece) for piece in pieces):
+                continue
+            bound.add("".join(piece[1:-1] for piece in pieces).upper().replace(" ", ""))
+        self.assertIn("SUPER+R", bound)
+        rows = [line.split("\t", 1) for line in (ROOT / "docs/keybindings.tsv").read_text().splitlines() if line and not line.startswith("#")]
+        runnable = {row[0]: myarch["chord_key"](row[0]) for row in rows}
+        self.assertGreaterEqual(sum(key is not None for key in runnable.values()), 30)
+        for chord, key in runnable.items():
+            if key is not None:
+                self.assertIn(key, bound, f"catalogue chord {chord!r} has no bind")
+
     def test_keybinding_catalogue_tracks_primary_chords(self) -> None:
         docs = (ROOT / "docs/keybindings.tsv").read_text()
         source = (ROOT / "src/hyprland/80-keybindings.lua.jinja").read_text()
@@ -486,8 +513,8 @@ class RenderTests(unittest.TestCase):
             namespace["parse_level"]("3", 2)
 
         bindings = (ROOT / "src/hyprland/80-keybindings.lua.jinja").read_text()
-        self.assertIn('hl.bind("XF86KbdBrightnessUp"', bindings)
-        self.assertIn('hl.bind("XF86KbdLightOnOff"', bindings)
+        self.assertIn('bind("XF86KbdBrightnessUp"', bindings)
+        self.assertIn('bind("XF86KbdLightOnOff"', bindings)
         router = (ROOT / "home/.mybin/myarch").read_text()
         self.assertIn('HOME / ".mybin/keyboard-backlight"', router)
 

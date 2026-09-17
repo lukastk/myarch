@@ -1,4 +1,7 @@
 # chord	action
+# `myarch keys` lists these and runs the row you pick, by looking the chord up in
+# myarch_binds (src/hyprland/80-keybindings.lua.jinja). A row whose chord is a family
+# (Super+1…5, Super+Arrow) or a hardware key is listed but not runnable.
 Super+Q / Super+Enter	Open terminal
 Super+T	Open floating terminal
 Super+E	Open file manager
