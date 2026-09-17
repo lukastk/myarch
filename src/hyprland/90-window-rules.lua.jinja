@@ -6,8 +6,12 @@
 -- NOT pinned: kitty (terminals are spawned everywhere); the one-shot layout
 -- script ~/.mybin/hypr-load-main (alias `ii`) places the terminal instead.
 -- Brave web-app windows (see ~/.mybin/webapp-*): class is brave-<host>__-Default.
+-- Obsidian's app-id became md.obsidian.Obsidian with obsidian-bin 1.13.7
+-- (2026-09-14; the package's desktop file is md.obsidian.Obsidian.desktop and
+-- says so in StartupWMClass). Until then it was plain `obsidian`. An unmatched
+-- pin fails silently: the window just lands on whichever workspace has focus.
 local pins = {
-    { name = "pin-obsidian", class = "^([Oo]bsidian)$",                 workspace = "2" },
+    { name = "pin-obsidian", class = "^(md\\.obsidian\\.Obsidian)$",    workspace = "2" },
     { name = "pin-slack",    class = "^([Ss]lack)$",                    workspace = "7" },
     { name = "pin-signal",   class = "^([Ss]ignal)$",                   workspace = "8" },
     { name = "pin-calendar", class = "^(org\\.gnome\\.Calendar)$",      workspace = "9" },
