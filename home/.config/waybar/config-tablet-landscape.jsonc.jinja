@@ -1,18 +1,19 @@
 /* pocket4 — compact ONE-ROW layout for LANDSCAPE tablet mode.
 
    At scale 2.0 the panel is 1280x800 logical pixels. The normal one-row layout
-   needs about 1520px, so this layout uses compact metrics and keeps the controls
-   that benefit most from immediate touch access. The omitted direct buttons are
-   still available through the Arch menu:
+   needs about 1520px, so this layout uses compact metrics (style-compact.css) but
+   keeps every button the full bar has: rotate, thermal mode, applications and
+   network are direct touches here, not trips through the Arch menu.
 
-     applications              Arch menu -> Applications
-     rotate                    Arch menu -> Displays
-     thermal / power mode      Arch menu -> Power
-     network                   Arch menu -> Network
-
-   Dictation is kept on the left and the workspace strip stays fixed in the
-   centre, so recording-state controls can appear without moving the workspace
-   targets under a finger. */
+   The workspace strip is LEFT-PACKED, not centred. Measured on pocket4
+   (2026-09-17): with every button present, the right group is ~442px idle, and
+   opening the display or brightness drawer grows it by ~150px. A centred strip
+   (227px) only stays put while each side is under (1280 - 227) / 2 = 526px, so
+   every drawer shoved the workspaces ~40px left and ellipsized the language
+   label. Left-packed, the strip sits at a fixed x: dictation's recording
+   controls grow to its RIGHT, and drawers grow the right group leftwards into
+   the free middle. The row only overflows if a drawer is opened while dictation
+   is recording (~542 + 166 left, ~442 + 150 right: about 1300px). */
 {
   "name": "tablet-landscape",
   "layer": "top",
@@ -26,22 +27,25 @@
     "custom/archicon",
     "clock",
     "group/sysinfo",
+    "group/workspaces",
     "custom/voxtype-start",
     "custom/voxtype",
     "custom/voxtype-cleanup",
     "custom/voxtype-cancel",
     "custom/recording"
   ],
-  "modules-center": [
-    "group/workspaces"
-  ],
+  "modules-center": [],
   "modules-right": [
+    "group/apps",
+    "custom/thermal",
+    "custom/rotate",
     "custom/tabletmode",
     "custom/osk",
     "group/display",
     "idle_inhibitor",
     "group/brightness",
     "group/volume",
+    "network",
     "hyprland/language",
     "group/tray"
   ],

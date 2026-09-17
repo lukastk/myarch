@@ -99,6 +99,17 @@ class RenderTests(unittest.TestCase):
                     with self.subTest(profile=profile, path=name):
                         json.loads(strip_jsonc(rendered))
 
+    def test_tablet_landscape_bar_keeps_every_button_and_a_fixed_workspace_strip(self) -> None:
+        template = (ROOT / "home/.config/waybar/config-tablet-landscape.jsonc.jinja").read_text()
+        bar = json.loads(strip_jsonc(self.env.from_string(template).render(**self.context("pocket4"))))
+        for module in ("group/apps", "custom/thermal", "custom/rotate", "network"):
+            self.assertIn(module, bar["modules-right"])
+        # Left-packed: nothing is centred, and the strip precedes dictation, whose
+        # recording controls must grow to its right rather than move it.
+        self.assertEqual([], bar["modules-center"])
+        left = bar["modules-left"]
+        self.assertLess(left.index("group/workspaces"), left.index("custom/voxtype-start"))
+
     def test_fuzzel_ini_renders_as_a_parseable_config(self) -> None:
         source = ROOT / "home/.config/fuzzel/fuzzel.ini.jinja"
         installer = runpy.run_path((ROOT / "install.py").as_posix(), run_name="__not_main__")
