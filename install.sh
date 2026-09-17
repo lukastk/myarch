@@ -52,6 +52,13 @@ if [[ $config_only == false ]]; then
     # plugin step and the autostart's `hyprpm reload` both need it.
     hyprpm
     xdg-desktop-portal-hyprland xdg-desktop-portal-gtk
+    # A Wine/Proton game under XWayland misplaces its fullscreen rectangle and
+    # leaks the pointer whenever two outputs are live; `display-mode external`
+    # (or `internal`) is the usual fix, and gamescope is the fallback for when
+    # neither is wanted — `gamescope -W <w> -H <h> -f -- %command%` as a Steam
+    # launch option nests the game in its own single-output display whatever the
+    # layout is. See home/.mybin/display-mode for the whole problem.
+    gamescope
     waybar fuzzel mako libnotify
     grim slurp hyprpicker cliphist wl-clipboard
     tesseract tesseract-data-eng zbar gpu-screen-recorder ffmpeg ffmpegthumbnailer

@@ -33,6 +33,13 @@
 # XWayland still sees two outputs and the game problem stands. Use `external` or
 # `internal` for gaming.
 #
+# GAMESCOPE IS THE FALLBACK when no single-output layout is wanted. install.sh
+# provisions it on both profiles: `gamescope -W <w> -H <h> -f -- %command%` as a
+# Steam launch option gives the game a private nested single-output display
+# whatever this script has the real outputs doing. On pocket4 `external` is
+# usually still better — native 1080p with no upscale, versus gamescope's
+# 1600x1000 upscaled 1.6x onto the 2560x1600 panel.
+#
 # MIRROR IS AN OVERLAY, NOT A FOURTH LAYOUT, and that is why it is not in the
 # cycle. You drop into it to present and come straight back out to whatever you
 # were doing, so `mirror-toggle` records the layout it covered and returns
