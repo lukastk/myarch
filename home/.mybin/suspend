@@ -1,0 +1,48 @@
+#!/bin/bash
+# suspend — put this machine to sleep now.
+#
+# It is `systemctl suspend` AS THE USER, and must never grow a sudo. polkit
+# authorises root for org.freedesktop.login1.suspend-ignore-inhibit outright,
+# so a root suspend walks straight past every block inhibitor: `server-mode on`
+# and a running `redbull` would both be silently overridden. As the user,
+# logind refuses while one is held — the contract those two rely on, and the
+# reason hypridle's 30-min listener is the same unprivileged `systemctl suspend`.
+#
+# NAME CLASH. `suspend` is a BUILTIN in both zsh and bash (it stops the shell
+# itself with SIGTSTP), and a builtin wins over PATH lookup. The registration in
+# home/.config/myarch/shell/myarch.zsh is therefore an ALIAS — aliases outrank
+# builtins — so typing `suspend` in any zsh that sourced myrig's zshenv reaches
+# this script. Everything else (bash, `zsh -f`, a non-myrig harness) has to call
+# it by path: ~/.mybin/suspend. That is also how the Super+R menu runs it.
+#
+# WHO MAY SUSPEND WITHOUT A PASSWORD is polkit's call
+# (org.freedesktop.login1.suspend), measured on pocket4 2026-09-18: a process in
+# the ACTIVE graphical session is allowed outright (pkcheck against Hyprland's
+# pid passes), while an SSH shell or a sesh thread under supervisor — inactive
+# or session-less — is auth_admin_keep and gets systemctl's own tty password
+# prompt. That prompt is deliberately kept: a password is the right cost for
+# putting a machine to sleep from a shell that is not sitting at it.
+#
+# With no terminal on stdin there is nobody to answer a prompt and nobody
+# reading stderr, so the refusal goes to a desktop notification as well. The
+# Super+R menu is exactly that caller, and its realistic failure is "inhibited"
+# — a suspend that is refused and says nothing reads as a broken menu item.
+# --check-inhibitors=yes keeps systemctl's client-side check (which names the
+# inhibitor and its reason) even off a tty, where `auto` would skip it and
+# logind's reply would be a bare "Interactive authentication required".
+#
+# Usage: suspend
+
+set -euo pipefail
+
+NOTIFY="$HOME/.mybin/notify"
+
+if [[ -t 0 ]]; then
+	exec systemctl suspend --check-inhibitors=yes
+fi
+
+if ! err=$(systemctl suspend --check-inhibitors=yes --no-ask-password 2>&1); then
+	printf '%s\n' "$err" >&2
+	"$NOTIFY" "Suspend refused---$err"
+	exit 1
+fi

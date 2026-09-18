@@ -73,6 +73,10 @@ def command_menu() -> None:
         "󰒍 Tailscale": lambda: panel("tailscale"),
         "󰔚 Stay awake": lambda: run([str(HOME / ".mybin/redbull"), "--bg", "--screen-on", "1"]),
         "󰒲 Lock": lambda: run(["loginctl", "lock-session"]),
+        # check=False: with no tty the script already reports a refusal (an
+        # inhibitor held by server-mode or redbull) as a desktop notification;
+        # a traceback on top of that would go to Hyprland's stderr, unseen.
+        "󰤄 Suspend": lambda: run([str(HOME / ".mybin/suspend")], check=False),
     }
     choice = select("myarch", list(entries))
     if choice is not None:

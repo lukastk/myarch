@@ -49,3 +49,9 @@ my_alias ri='~/.mybin/hypr-load-main'	-g hyprland -d 'Relaunch missing workspace
 my_alias redbull	-g hyprland -d 'Stay awake for N hours (--screen-on also stops the screen locking)'
 my_alias redbull-off	-g hyprland -d 'End the stay-awake early'
 my_alias redbull-status	-g hyprland -d 'Show what is inhibiting sleep/idle, and for how long'
+
+# The opposite direction. This one MUST be an alias (name='body'), not a bare
+# registration: `suspend` is a zsh builtin that stops the shell itself, and a
+# builtin outranks a PATH lookup — only an alias outranks the builtin. See the
+# script's header for the polkit and inhibitor behaviour.
+my_alias suspend='~/.mybin/suspend'	-g hyprland -d 'Suspend the machine now (refused while server-mode or redbull hold a lock)'
