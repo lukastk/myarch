@@ -35,7 +35,9 @@ hl.on("hyprland.start", function()
     -- this is here for luminance, not for a blue-light filter.
     hl.exec_cmd("uwsm app -- hyprsunset --identity")
     hl.exec_cmd("uwsm app -- mako")
-    hl.exec_cmd("uwsm app -- hypridle")
+    -- uwsm scopes inherit Hyprland's discarded stdio. Keep idle/lock lifecycle
+    -- diagnostics in the journal rather than losing every slow-wake trace.
+    hl.exec_cmd("uwsm app -- systemd-cat -t hypridle hypridle")
     hl.exec_cmd("systemctl --user start hyprpolkitagent.service")
     -- NOTE: the on-screen keyboard is deliberately NOT started here, and there
     -- is nothing to start — it is spawned on demand and killed to dismiss (see

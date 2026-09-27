@@ -84,6 +84,16 @@ class RenderTests(unittest.TestCase):
                         self.assertNotIn("{{", rendered)
                         self.assertNotIn("{%", rendered)
 
+    def test_idle_and_lock_logs_survive_discarded_compositor_stdio(self) -> None:
+        autostart = (ROOT / "src/hyprland/20-autostart.lua.jinja").read_text()
+        idle = (ROOT / "home/.config/hypr/hypridle.conf").read_text()
+        self.assertIn('uwsm app -- systemd-cat -t hypridle hypridle', autostart)
+        self.assertIn('lock_cmd = pidof hyprlock || systemd-cat -t hyprlock hyprlock', idle)
+        # Keep the lock-notify auto-inhibit detection and lock-before-sleep path.
+        self.assertIn('before_sleep_cmd = loginctl lock-session', idle)
+        self.assertNotIn('WAYLAND_DEBUG=', autostart + idle)
+
+
     def test_waybar_jsonc_is_valid_for_both_profiles(self) -> None:
         for profile in ("pocket4", "ideapad"):
             context = self.context(profile)
