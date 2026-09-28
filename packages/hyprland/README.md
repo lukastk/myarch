@@ -51,10 +51,12 @@ moving the trackpad, and the journal recorded successful authentication/unlock.
 This verifies the reproduced touch-last focus failure, not every historical
 wake delay. The separate three-second blocking power-restoration hook is unchanged.
 
+Lukas also verified that touchscreen selection-handle dragging still works in
+**both Brave and Obsidian** on 3.2, confirming the original protection is retained.
+
 After a rebuild, test touch-last lock, pointer-last lock, lock + DPMS, and
-touch-selection handle dragging in Brave/Obsidian. Post-3.2 DPMS and real
-selection-handle checks are still pending. Never log password keycodes to
-diagnose focus.
+touch-selection handle dragging in Brave/Obsidian. The post-3.2 DPMS comparison
+is still pending. Never log password keycodes to diagnose focus.
 
 ## Build and install
 

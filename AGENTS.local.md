@@ -512,7 +512,9 @@ onto the built-in mic while the buds stay the output.
   event at 13:42:05.376. Authentication succeeded at 13:42:08.551; unlocked at
   13:42:09.355. Lukas confirmed "it worked!". This verifies the reproduced
   failure is fixed, not just that the patch compiled.
-- Fix commit: 37d3bfd. Still pending: post-3.2 DPMS comparison and real touch
-  selection-handle check in Brave/Obsidian (asked Lukas for that check). Separate
-  blocking three-second power hook unchanged; don't generalize this result to
-  every historical wake delay.
+- Lukas subsequently confirmed touchscreen selection-handle dragging still works
+  in BOTH Brave and Obsidian on 3.2. The original touch-selection protection
+  passes that real-hardware regression check.
+- Fix commit: 37d3bfd. Still pending: post-3.2 DPMS comparison. Separate blocking
+  three-second power hook unchanged; don't generalize this result to every
+  historical wake delay.
