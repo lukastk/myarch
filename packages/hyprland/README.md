@@ -44,10 +44,17 @@ the lock surface rather than the underlying application, so the exception does
 not remove the touch-selection protection on an unlocked desktop. Both the
 touch-driven drag exception and ordinary mouse behavior remain unchanged.
 
-After deployment, test touch-last lock, pointer-last lock, lock + DPMS, and
-touch-selection handle dragging in Brave/Obsidian. The pre-fix failure/recovery
-is confirmed; a corrected-build comparison is required before calling the fix
-verified. Never log password keycodes to diagnose focus.
+Verified on pocket4 after installing 3.2 and restarting, 2026-09-28 13:42: touch
+remained the last input, but keyboard and pointer focus matched the mapped lock
+surface at the first probe (~0.5 seconds). Lukas confirmed typing worked without
+moving the trackpad, and the journal recorded successful authentication/unlock.
+This verifies the reproduced touch-last focus failure, not every historical
+wake delay. The separate three-second blocking power-restoration hook is unchanged.
+
+After a rebuild, test touch-last lock, pointer-last lock, lock + DPMS, and
+touch-selection handle dragging in Brave/Obsidian. Post-3.2 DPMS and real
+selection-handle checks are still pending. Never log password keycodes to
+diagnose focus.
 
 ## Build and install
 

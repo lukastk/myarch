@@ -480,7 +480,7 @@ onto the built-in mic while the buds stay the output.
   touch-selection patch's lock-focus interaction without removing touch selection;
   coordinate any compositor restart first (it closes the desktop session).
 
-### Lock-focus correction built and installed (2026-09-28; hardware retest pending)
+### Lock-focus correction deployed and touch-last verified (2026-09-28)
 
 - `touch-synthetic-pointer.patch` now returns early only for touch-last + no
   drag target + **unlocked** session. Locked sessions retain Hyprland's normal
@@ -498,13 +498,21 @@ onto the built-in mic while the buds stay the output.
   logs: ~/.cache/myarch/packages/hyprland/{build,plugins}-3.2.log.
 - New binary build ID: d10363e9c600d444daba45506383b44104853545. Verified all
   probe offsets OFFLINE against the new debug package (unchanged), and updated
-  /tmp/pocket4-lock-focus.py to require that ID. New debug symbols extracted to
-  /tmp/pocket4-hyprland-3.2-symbols (~514MB; remove after investigation).
+  /tmp/pocket4-lock-focus.py to require that ID. Removed the temporary ~514MB
+  debug extraction after verification; its package remains in the build cache.
 - Lukas authorized proceeding/restart. Warned him to save work, then used normal
   `hl.exec_cmd("uwsm stop")` after both builds passed. Old Hyprland PID 5264
-  exited cleanly; GDM greeter appeared. Waiting for him to sign back in, tap
-  touchscreen without moving trackpad, and say ready. Always rediscover the
-  new Hyprland signature and loginctl desktop session before the lock retest.
-- Still required: corrected-build touch-last lock + typing comparison; DPMS
-  comparison; real touch-selection handle test in Brave/Obsidian. Do not claim
-  runtime verification yet. Separate blocking three-second power hook unchanged.
+  exited cleanly; GDM greeter appeared. He signed back in: Hyprland PID 267093,
+  desktop session **11**, running the expected new build ID. Both plugins loaded;
+  configerrors empty. Rediscover the signature/session after every restart.
+- Corrected-build touch-last retest at 13:42:05: m_lastInputTouch=true before
+  locking AND through the two locked snapshots. Keyboard and pointer focus
+  matched mapped lock surface 0x55f516e21fc0 at the first probe (~0.5s) and
+  at ~2s, without physical pointer input. Resource gathering took 8ms; locked
+  event at 13:42:05.376. Authentication succeeded at 13:42:08.551; unlocked at
+  13:42:09.355. Lukas confirmed "it worked!". This verifies the reproduced
+  failure is fixed, not just that the patch compiled.
+- Fix commit: 37d3bfd. Still pending: post-3.2 DPMS comparison and real touch
+  selection-handle check in Brave/Obsidian (asked Lukas for that check). Separate
+  blocking three-second power hook unchanged; don't generalize this result to
+  every historical wake delay.
