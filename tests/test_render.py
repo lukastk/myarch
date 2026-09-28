@@ -269,6 +269,23 @@ class RenderTests(unittest.TestCase):
         self.assertIn('sudo pacman -S --noconfirm --needed "${stock[@]}"', install)
         self.assertIn('"$repo/packages/install-patched" "$package"', install)
 
+    def test_touch_pointer_patch_preserves_session_lock_focus(self) -> None:
+        import hashlib
+
+        patch_path = ROOT / "packages/hyprland/touch-synthetic-pointer.patch"
+        patch = patch_path.read_text()
+        # SessionLockManager's map/commit callbacks need synthetic movement to
+        # acquire keyboard focus, even when touchscreen input was last.
+        self.assertIn(
+            '+    if (m_lastInputTouch && !g_layoutManager->dragController()->target()'
+            ' && !g_pSessionLockManager->isSessionLocked())\n+        return;',
+            patch,
+        )
+        # Keep the original pointer dispatch after the early-return guard.
+        self.assertIn('     mouseMoveUnified(Time::millis(Time::steadyNow()));', patch)
+        pkgbuild = (ROOT / "packages/hyprland/PKGBUILD").read_text()
+        self.assertIn(hashlib.sha256(patch_path.read_bytes()).hexdigest(), pkgbuild)
+
     def test_profile_specific_sources_do_not_install_on_ideapad(self) -> None:
         pocket_files = [path for path in (ROOT / "home").glob("**/*") if path.is_file() and (path.name.startswith("pocket4-") or path.name in {"config-narrow.jsonc.jinja", "config-tablet-landscape.jsonc.jinja", "style-compact.css", "pocket4.zsh"})]
         self.assertGreaterEqual(len(pocket_files), 10)

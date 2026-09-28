@@ -7,7 +7,7 @@
 
 pkgname=(hyprland hyprpm)
 pkgver=0.56.2
-pkgrel=3.1
+pkgrel=3.2
 pkgdesc='a highly customizable dynamic tiling Wayland compositor'
 arch=(x86_64 aarch64)
 url="https://github.com/hyprwm/${pkgname^}"
@@ -70,7 +70,7 @@ _archive="${pkgname^}-$pkgver"
 source=("$_archive.tar.gz::$url/releases/download/v$pkgver/source-v$pkgver.tar.gz"
         touch-synthetic-pointer.patch)
 sha256sums=('03ad3f5ef152ff44116ffd56fcf808486211ecabf4f0ba567108ee746ba5cd2e'
-            '9f992daeb6d46fcea383d4ba71271e1353c1bb0ce4ea1cd803e0147b55bbbf99')
+            'adf9f81f95ce42ded9f4865df3bfa2582efb270a2e9486e719f4ba80d898b8c4')
 
 prepare() {
 	ln -sf hyprland-source "$_archive"

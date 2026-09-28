@@ -1,7 +1,7 @@
 # Patched Hyprland for pocket4 touch selection
 
 Arch's `hyprland` 0.56.2-3 with one patch, `touch-synthetic-pointer.patch`, built
-as `0.56.2-3.1`. pocket4 lists it in `profiles/pocket4.toml` `[packages] patched`, so
+as `0.56.2-3.2`. pocket4 lists it in `profiles/pocket4.toml` `[packages] patched`, so
 `install.sh` builds and installs it (`packages/install-patched hyprland`); ideapad
 keeps the stock package.
 
@@ -16,8 +16,9 @@ Chromium (Brave, Obsidian) takes that as mouse activity and hides its
 touch-selection handles and touch menu. Grabbing a selection handle closes
 Chromium's Cut/Copy bar, which unmaps a subsurface, which fires exactly that
 motion, so every range-handle drag ended the moment it started. The patch returns
-early while `m_lastInputTouch` is set and no drag target is held (touch-driven
-mouse-bind drags from hyprgrass still need the move).
+early while `m_lastInputTouch` is set, no drag target is held, and the session is
+**not locked** (touch-driven mouse-bind drags and lock-screen focus still need
+the move).
 
 The other half of the problem, hyprgrass sending pointer motion on every touch
 down, is fixed in the `lukastk/hyprgrass` fork (`docs/plugin-forks.md`).
@@ -28,14 +29,37 @@ and then `wl_pointer.enter` + `wl_pointer.motion`, and the handles vanished. Wit
 the patch the right handle drags the selection word by word in Brave and in
 Obsidian, and the bar's Copy button works by touch.
 
+## Lock-screen focus regression fixed in 3.2
+
+The original 3.1 guard also suppressed the synthetic movement used by
+`SSessionLockSurface`'s map/commit handlers to acquire keyboard focus. On
+2026-09-28, locking immediately after touchscreen input reproduced a mapped lock
+surface with **null keyboard focus** for over 20 seconds; typing produced no
+dots. Moving the trackpad **without clicking** restored focus to that same lock
+surface and typing immediately worked. The pointer-last comparison worked.
+No suspend or DPMS was needed to reproduce the touch-last failure.
+
+3.2 exempts locked sessions from the guard. Hyprland's locked-input path focuses
+the lock surface rather than the underlying application, so the exception does
+not remove the touch-selection protection on an unlocked desktop. Both the
+touch-driven drag exception and ordinary mouse behavior remain unchanged.
+
+After deployment, test touch-last lock, pointer-last lock, lock + DPMS, and
+touch-selection handle dragging in Brave/Obsidian. The pre-fix failure/recovery
+is confirmed; a corrected-build comparison is required before calling the fix
+verified. Never log password keycodes to diagnose focus.
+
 ## Build and install
 
 `install.sh --profile pocket4` does it: `packages/install-patched hyprland` copies
 this directory to `~/.cache/myarch/packages/hyprland`, runs
 `makepkg --syncdeps --cleanbuild --clean` (the build tree, ~3 GB, is removed afterwards), and `pacman -U`s the `hyprland` package (not
-`hyprpm` or `-debug`). It skips the build when `0.56.2-3.1` is already installed, so
-**bump the suffix (3.1 -> 3.2) whenever the patch changes.** Restart Hyprland for a
-new build to take effect.
+`hyprpm` or `-debug`). It skips the build when `0.56.2-3.2` is already installed, so
+**bump the suffix (e.g. 3.2 -> 3.3) whenever the patch changes.** Rebuild the
+hyprpm plugins after the compositor update (`hyprpm update -f`), and restart
+Hyprland for the new compositor and plugin builds to take effect. Coordinate
+that restart: it closes the running desktop apps. The 3.2 change keeps the same
+upstream commit and library ABI; no plugin pin rebase is needed.
 
 ## When Arch updates Hyprland
 

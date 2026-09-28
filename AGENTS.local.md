@@ -452,3 +452,59 @@ onto the built-in mic while the buds stay the output.
 - Next: touch-last lock comparison. server-mode currently inhibits suspend;
   do NOT bypass that without coordination. Animations unchanged; power hook
   not yet changed.
+
+### Touch-last lock reproduces missing keyboard focus (2026-09-28 13:20)
+
+- Session changed after the Sep 26 test: Hyprland PID 5264; active local Wayland
+  session **4**, not 3 (3 is now the user manager). Always recheck loginctl.
+  /tmp probe was gone; recreated it with the same exact running build-ID guard
+  (0a2d57e327304c7eca72a960845ffd4fcff7e608). No debugger attachment.
+- Lukas tapped touchscreen and left trackpad untouched. Probe verified
+  m_lastInputTouch=true immediately before `loginctl lock-session 4`. No DPMS
+  or suspend in this test.
+- Lock started 13:20:39; resources ready in 8ms; onLockLocked at 13:20:39.921.
+  Mapped lock surface 0x55683959dbc0, but keyboard focus NULL at +0.5s, +2s,
+  +5s, and still at 13:21:00. Pointer/touch focus remained on pre-lock surface.
+  This CONFIRMS a touch-last missing-focus failure, unlike the pointer-last
+  comparison. It strongly implicates the simulateMouseMovement touch guard,
+  but no corrected-build comparison yet and not proof every historical stall
+  has this cause.
+- Lukas confirmed a non-password letter produced NO dot while touch-last focus
+  was NULL. Then, asked to move the trackpad WITHOUT clicking and type a letter,
+  he confirmed a dot appeared. Probe at 13:21:56 verified m_lastInputTouch=false
+  and keyboard/pointer focus both matched the SAME mapped lock surface
+  0x55683959dbc0. Thus real pointer movement alone restores focus and typing;
+  a click is unnecessary. This reproduces failure AND recovery, not just timing
+  coincidence. No corrected-build comparison or fix deployed yet.
+- Told Lukas to Ctrl+U to clear the test letter and unlock normally. Correct the
+  touch-selection patch's lock-focus interaction without removing touch selection;
+  coordinate any compositor restart first (it closes the desktop session).
+
+### Lock-focus correction built and installed (2026-09-28; hardware retest pending)
+
+- `touch-synthetic-pointer.patch` now returns early only for touch-last + no
+  drag target + **unlocked** session. Locked sessions retain Hyprland's normal
+  synthetic-movement focus path; unlocked touch selection is still protected.
+- Bumped package to 0.56.2-3.2 and updated patch checksum/README. Added a
+  regression assertion for all three guard terms and matching package checksum.
+  All 30 repo tests and diff checks pass. Patch applied to the original source
+  with zero fuzz. A temporary C++ harness compiled the actual patched function
+  against minimal stubs: all eight touch/drag/lock combinations pass; removing
+  the lock exception reproduces the failing truth-table case.
+- Built/installed via `taskset -c 0-5 packages/install-patched hyprland` in user
+  unit myarch-hyprland-build-3-2. Rebuilt both plugins with `hyprpm update -f`
+  in myarch-hyprpm-rebuild-3-2. Both units exited 0. Pins stayed hyprgrass
+  9ff50a2 and hyprexpo c620890; no upstream version or ABI change. Build/plugin
+  logs: ~/.cache/myarch/packages/hyprland/{build,plugins}-3.2.log.
+- New binary build ID: d10363e9c600d444daba45506383b44104853545. Verified all
+  probe offsets OFFLINE against the new debug package (unchanged), and updated
+  /tmp/pocket4-lock-focus.py to require that ID. New debug symbols extracted to
+  /tmp/pocket4-hyprland-3.2-symbols (~514MB; remove after investigation).
+- Lukas authorized proceeding/restart. Warned him to save work, then used normal
+  `hl.exec_cmd("uwsm stop")` after both builds passed. Old Hyprland PID 5264
+  exited cleanly; GDM greeter appeared. Waiting for him to sign back in, tap
+  touchscreen without moving trackpad, and say ready. Always rediscover the
+  new Hyprland signature and loginctl desktop session before the lock retest.
+- Still required: corrected-build touch-last lock + typing comparison; DPMS
+  comparison; real touch-selection handle test in Brave/Obsidian. Do not claim
+  runtime verification yet. Separate blocking three-second power hook unchanged.
