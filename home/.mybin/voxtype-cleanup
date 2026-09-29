@@ -4,12 +4,27 @@
 Voxtype supplies the raw transcript on stdin and consumes the cleaned transcript
 from stdout. Errors are made visible with a critical notification before this
 process exits non-zero.
+
+THE API KEY IS FETCHED HERE, LAZILY, NOT INHERITED FROM THE DAEMON. It used to
+be read once by ~/.mybin/voxtype-daemon at daemon start and exported into the
+environment, which raced the network and lost: voxtype.service is
+WantedBy=graphical-session.target, so it starts at LOGIN, and on pocket4
+2026-09-29 the wifi did not associate until 5m32s later (session 11:38:14, first
+NetworkManager connect attempt 11:43:46). `secret get` shells out to `op`, which
+needs the internet, so the fetch failed, the wrapper swallowed it, and the
+daemon then ran for the whole session with no key — every cleanup failing with
+"MY_ANTHROPIC_API_KEY is missing". Fetching at cleanup time cannot race
+anything: by the time a cleanup is requested the user has dictated something and
+we are about to call api.anthropic.com anyway, so the network is up or the
+request was going to fail regardless. It also keeps the key out of a long-lived
+daemon's environment. Measured cost: ~0.56s per cleanup, against a multi-second
+Opus call.
 """
 
 from __future__ import annotations
 
 import json
-import os
+import pathlib
 import subprocess
 import sys
 import urllib.error
@@ -38,14 +53,40 @@ def fail(message: str) -> "NoReturn":
     raise RuntimeError(message)
 
 
+def read_api_key() -> str:
+    """Fetch MY_ANTHROPIC_API_KEY from the 1Password `mysetup` vault.
+
+    `secret` is addressed by absolute path, not through PATH: the daemon's PATH
+    does not carry ~/.mybin (it is ~/.local/bin:/usr/local/bin:/usr/bin:/bin plus
+    whatever systemd inherited), so a bare `secret` would not resolve. The key is
+    deliberately NOT env-tagged, so it never appears in ~/.env and there is no
+    ambient copy to read instead.
+    """
+    secret = pathlib.Path.home() / ".mybin/secret"
+    if not secret.is_file():
+        fail(f"{secret} is missing — myrig's `secret` command is not deployed")
+
+    result = subprocess.run(
+        [str(secret), "get", "MY_ANTHROPIC_API_KEY"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or f"exit status {result.returncode}"
+        fail(f"Could not read MY_ANTHROPIC_API_KEY from 1Password: {detail}")
+
+    api_key = result.stdout.strip()
+    if not api_key:
+        fail("1Password returned an empty MY_ANTHROPIC_API_KEY")
+    return api_key
+
+
 def main() -> int:
     transcript = sys.stdin.read()
     if not transcript.strip():
         fail("Voxtype passed an empty transcript to cleanup")
 
-    api_key = os.environ.get("MY_ANTHROPIC_API_KEY")
-    if not api_key:
-        fail("MY_ANTHROPIC_API_KEY is missing from the Voxtype daemon environment")
+    api_key = read_api_key()
 
     body = json.dumps(
         {

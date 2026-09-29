@@ -11,18 +11,13 @@ if [ -f "$HOME/.env" ]; then
     set +a
 fi
 
-# MY_ANTHROPIC_API_KEY is deliberately NOT env-tagged (kept out of the ambient
-# ~/.env), so fetch it on demand from the 1Password `mysetup` vault via `secret
-# get` — the same pattern the anki-api / mysrs supervisor wrappers use. Only the
-# optional Anthropic cleanup profile needs it, so a failed/absent fetch is
-# NON-FATAL: raw transcription still works, and voxtype-cleanup fails loudly on
-# its own if the key is missing when a cleanup is actually requested. `secret`
-# needs op + jq on PATH.
+# MY_ANTHROPIC_API_KEY is NOT fetched here, deliberately. This service is
+# WantedBy=graphical-session.target, i.e. it starts at LOGIN, which regularly
+# beats the network by minutes (pocket4 2026-09-29: session up 11:38:14, wifi
+# not associating until 11:43:46). `secret get` shells out to `op`, which needs
+# the internet, so a fetch at this point loses that race and leaves the daemon
+# keyless for the whole session. ~/.mybin/voxtype-cleanup therefore fetches it
+# itself, at the moment a cleanup is actually requested — see its docstring.
 export PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
-if [ -x "$HOME/.mybin/secret" ]; then
-    _anthropic="$("$HOME/.mybin/secret" get MY_ANTHROPIC_API_KEY 2>/dev/null || true)"
-    [ -n "$_anthropic" ] && export MY_ANTHROPIC_API_KEY="$_anthropic"
-    unset _anthropic
-fi
 
 exec /usr/bin/voxtype -q daemon
