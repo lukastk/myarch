@@ -82,6 +82,11 @@ bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd(
 bind(mainMod .. " + CTRL + I", hl.dsp.exec_cmd(
     terminal .. " --app-id=audio-input-pick " .. termCells(72, 16) ..
     " -e {{ home }}/.mybin/audio-input"))
+-- Output is independent too. An explicit preference survives reconnects; the
+-- picker's Automatic row clears it and returns to WirePlumber's priorities.
+bind(mainMod .. " + CTRL + O", hl.dsp.exec_cmd(
+    terminal .. " --app-id=audio-output-pick " .. termCells(72, 16) ..
+    " -e {{ home }}/.mybin/audio-output"))
 {% if 'pocket4' in targets %}
 -- The keyboard/terminal counterpart to tapping the Pocket thermal button. The
 -- existing tap/secondary-tap cycle remains intact; this opens fzf directly on

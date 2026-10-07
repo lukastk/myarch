@@ -61,15 +61,15 @@ hl.window_rule({
     float = true,
 })
 
--- The Super+N / Super+Shift+N connectivity TUIs and Super+Ctrl+I input
--- chooser, on the same reasoning as the wallpaper picker above: a transient
+-- The Super+N / Super+Shift+N connectivity TUIs and Super+Ctrl+I/O audio
+-- choosers, on the same reasoning as the wallpaper picker above: a transient
 -- chooser should not join the tiling grid and reflow what you were working in.
 -- Float only — size comes from the terminal's character-cell sizing, and no
 -- `center` rule, because Hyprland already places these identically with and
 -- without one (measured for the picker above; these are the same kind of window).
 hl.window_rule({
     name  = "float-connectivity-tui",
-    match = { class = "^(net-tui|bt-tui|audio-input-pick)$" },
+    match = { class = "^(net-tui|bt-tui|audio-input-pick|audio-output-pick)$" },
     float = true,
 })
 

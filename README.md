@@ -93,6 +93,16 @@ myarch capture stop
 
 Important keybindings include `Super+R` (myarch menu), `Super+Alt+Space` (applications), `Super+G` (overview), `Super+D` (dictation), `Super+V` (clipboard history), Print / `Super+Shift+S` (screenshots), and `Super+Ctrl+S` (capture menu). The complete catalogue is in [`docs/keybindings.tsv`](docs/keybindings.tsv) and available through `myarch keys`, which also RUNS the row you pick — the same action the key runs, so the list works with the keyboard folded away. Rows describing a family of chords (`Super+1…5`) or hardware keys say so instead.
 
+**Audio selection:** `Super+Ctrl+I` chooses the recording input; `Super+Ctrl+O`
+runs `audio-output`, the playback picker. It marks the active output and shows
+whether selection is automatic or explicitly preferred. Choose a device to
+override the priority rules, or **Automatic** to clear the output preference
+and its history. WirePlumber remembers an explicit choice across reconnects
+and restarts; while that device is absent, another available output is used.
+The picker also moves existing playback streams (including per-app targets),
+but never changes the microphone, device volumes/mutes, or Bluetooth profile.
+Both shortcuts are available through `Super+R` → Keybindings.
+
 ## Repository layout
 
 ```text
