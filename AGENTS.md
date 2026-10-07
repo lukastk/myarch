@@ -63,3 +63,25 @@ For the review:
 - Check whether upstream hyprgrass has the touch-down refocus fix and whether Hyprland's `simulateMouseMovement` skips touch input on its own (checks in `docs/plugin-forks.md` and `packages/hyprland/README.md`); say what can be dropped.
 - Ask whether to report upstream: the hyprgrass touch-down fix, the Hyprland patch, and whether to offer `pointer_emulation_mods` to hyprgrass. Never file anything upstream without his explicit go-ahead.
 - Decision notes are in the myvault pad `pad/Revisit myarch's hyprpm plugin forks.md`. The matching task (📅 2026-11-02) is in the planner note `pln/2026-09-17.md`; mark it done when the review is finished.
+
+## Desktop/test safety
+
+- Coordinate compositor restarts with Lukas; they close the desktop session. Never interrupt a debugger attached to live Hyprland: SIGINT can be delivered on detach and kill the compositor. Prefer non-ptrace diagnostics; recheck the running build before using memory offsets.
+- Never capture real password keycodes with WAYLAND_DEBUG or evdev logging. Coordinate lock/DPMS/suspend tests and do not bypass server-mode suspend inhibition without agreement. Preserve delayed power-limit restoration; do not disable systemd's freezer to hide resume lag.
+- Rediscover the active desktop session and `HYPRLAND_INSTANCE_SIGNATURE` after restarts; historical PIDs/session IDs are not reusable.
+- For speech tests, play an audible cue through the earbuds, give a scoreable sentence, and wait for Lukas's go. Target a background task by its ID, not `pkill -f <script>` (which can kill the harness shell).
+- `myrig-reinstall` restarts supervisord and can kill the Sesh work tmux server and its threads; coordinate fleet reinstalls, and check for one when diagnosing a Pocket session crash.
+
+## Task-to-reference routing (on demand only)
+
+Read the relevant reference/section for the task, not this entire list at startup.
+
+| Task | Reference |
+| --- | --- |
+| Installer/rendering, ownership, source layout | [Architecture](docs/architecture.md); [commands and layout](README.md) |
+| Pocket display/tablet/bar/touch changes | [Pocket contract and validation](docs/pocket4.md); [feature parity](docs/feature-parity.md); explicit profiles in `profiles/` |
+| Shortcuts and actions | [Binding catalogue](docs/keybindings.tsv) |
+| Hyprland updates, plugin ABI/pins, fork review | [Plugin forks](docs/plugin-forks.md); [patched Hyprland](packages/hyprland/README.md) |
+| Trackpad tuning, launcher focus/latency, plugin failures, touch selection, debugger recovery, Bluetooth/dictation, lock/wake, audio routing | [Desktop investigation topic index](docs/desktop-investigations.md#topic-index): select the relevant dated section; later findings supersede earlier diagnoses |
+
+Keep `AGENTS.local.md` a compact live trap digest. Put detailed evidence/history in ordinary topic docs, not eager imports. `CLAUDE.md` imports only this guide and that digest; preserve those entry points for Pi/Claude/Codex.
