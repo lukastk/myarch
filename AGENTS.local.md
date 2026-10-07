@@ -518,3 +518,17 @@ onto the built-in mic while the buds stay the output.
 - Fix commit: 37d3bfd. Still pending: post-3.2 DPMS comparison. Separate blocking
   three-second power hook unchanged; don't generalize this result to every
   historical wake delay.
+
+## Audio output override (2026-10-07)
+
+- `Super+Ctrl+O` runs `home/.mybin/audio-output`, paired with `Super+Ctrl+I`
+  for recording input. An explicit output preference is WirePlumber-owned and
+  persistent; Automatic clears only the output preference/history. No new daemon
+  or state file and no priority-rule changes.
+- `wpctl clear-default 0` means the Audio/Sink SETTINGS id, not node id 0.
+  Omitting the argument would also clear microphone/camera preferences.
+- Verified on Pocket 4 through a disposable tmux server at 72x16: search Nothing
+  → Enter selects the earbuds, Escape changes nothing, search Automatic → Enter
+  restores HDMI, and the microphone remains unchanged. No test sound played.
+- Motivation: the existing HDMI=1050 rule outranks Bluetooth A2DP=1010. Manual
+  override supplies user choice without undoing the TV-over-speakers policy.
