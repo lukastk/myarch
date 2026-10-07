@@ -84,6 +84,32 @@ class RenderTests(unittest.TestCase):
                         self.assertNotIn("{{", rendered)
                         self.assertNotIn("{%", rendered)
 
+    def test_whatsapp_is_registered_in_applications_for_both_profiles(self) -> None:
+        import configparser
+
+        source = ROOT / "home/.local/share/applications/myarch-whatsapp.desktop.jinja"
+        installer = runpy.run_path((ROOT / "install.py").as_posix(), run_name="__not_main__")
+        self.assertTrue((ROOT / "home/.mybin/webapp-whatsapp").is_file())
+        for profile in ("pocket4", "ideapad"):
+            with self.subTest(profile=profile):
+                self.assertIn(source, installer["selected_home_sources"](profile))
+                context = self.context(profile)
+                context["home"] = "/home/test user"
+                rendered = installer["add_disclaimer"](
+                    source, self.env.from_string(source.read_text()).render(**context)
+                )
+                desktop = configparser.ConfigParser(interpolation=None)
+                desktop.read_string(rendered)
+                entry = desktop["Desktop Entry"]
+                self.assertEqual(entry["Type"], "Application")
+                self.assertEqual(entry["Name"], "WhatsApp")
+                self.assertEqual(entry["Exec"], '"/home/test user/.mybin/webapp-whatsapp"')
+                self.assertFalse(entry.getboolean("Terminal"))
+                self.assertNotIn("Hidden", entry)
+                self.assertNotIn("NoDisplay", entry)
+                self.assertNotIn("OnlyShowIn", entry)
+                self.assertNotIn("NotShowIn", entry)
+
     def test_idle_and_lock_logs_survive_discarded_compositor_stdio(self) -> None:
         autostart = (ROOT / "src/hyprland/20-autostart.lua.jinja").read_text()
         idle = (ROOT / "home/.config/hypr/hypridle.conf").read_text()
