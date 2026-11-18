@@ -52,7 +52,7 @@ Any explicitly agreed temporary path must carry the exact `TODO(cleanup):` tag a
 
 ## Scheduled review: carried patches and upstream reports (due 2026-11-02)
 
-Since 2026-09-17, hyprexpo and hyprgrass have been installed from temporary `lukastk` forks. `.github/workflows/sync-plugin-forks.yml` keeps them current, using `PLUGIN_FORK_SYNC_TOKEN`, a copy of the account-wide GitHub token. Why each fork exists and when it can go: `docs/plugin-forks.md`. The hyprgrass fork also carries two code changes for touch selection (branch `pocket4-hyprland-0.56.2`), and pocket4 runs a patched Hyprland from `packages/hyprland/`. Reporting either fix upstream was deliberately deferred to this review.
+Since 2026-09-17, hyprgrass has been installed from a temporary `lukastk` fork (hyprexpo returned to upstream on 2026-11-18). `.github/workflows/sync-plugin-forks.yml` keeps it current, using `PLUGIN_FORK_SYNC_TOKEN`, a copy of the account-wide GitHub token. Why the fork exists and when it can go: `docs/plugin-forks.md`. The hyprgrass fork carries one code change, `pointer_emulation_mods` (branch `pocket4-hyprland-0.57.2`), and pocket4 runs a patched Hyprland from `packages/hyprland/`. Reporting either fix upstream was deliberately deferred to this review.
 
 **On or after 2026-11-02, bring this review up with Lukas near the start of any session in this repo**, whatever the session is about, until he has decided and this section has been updated or removed. Before that date, raise it only if the sync job is failing, the work touches hyprpm plugins, or Hyprland is being updated (the hyprgrass branch and the Hyprland patch both need rebasing then).
 

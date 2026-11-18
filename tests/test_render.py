@@ -500,31 +500,31 @@ class RenderTests(unittest.TestCase):
             configure_plugins(profile, {})
             return calls
 
-        repositories = {"hyprgrass": "horriblename", "hyprexpo": "sandwichfarm"}
+        repositories = {"hyprgrass": "horriblename", "hyprexpo": "lukastk"}
         calls = install("pocket4", repositories)
         update = calls.index(["hyprpm", "update"])
         for stale, url in (
             ("horriblename/hyprgrass", "https://github.com/lukastk/hyprgrass"),
-            ("sandwichfarm/hyprexpo", "https://github.com/lukastk/hyprexpo"),
+            ("lukastk/hyprexpo", "https://github.com/sandwichfarm/hyprexpo"),
         ):
             # A stale repository goes before the update it would otherwise fail.
             self.assertLess(calls.index(["hyprpm", "remove", stale]), update)
             self.assertLess(update, calls.index(["hyprpm", "add", url]))
-        self.assertEqual({"hyprgrass": "lukastk", "hyprexpo": "lukastk"}, repositories)
+        self.assertEqual({"hyprgrass": "lukastk", "hyprexpo": "sandwichfarm"}, repositories)
 
         rerun = install("pocket4", repositories)
         self.assertEqual([], [argv for argv in rerun if argv[1] in ("remove", "add")])
         self.assertIn(["hyprpm", "enable", "hyprgrass"], rerun)
 
-        ideapad = install("ideapad", {"hyprexpo": "sandwichfarm"})
-        self.assertIn(["hyprpm", "add", "https://github.com/lukastk/hyprexpo"], ideapad)
+        ideapad = install("ideapad", {"hyprexpo": "lukastk"})
+        self.assertIn(["hyprpm", "add", "https://github.com/sandwichfarm/hyprexpo"], ideapad)
         self.assertFalse([argv for argv in ideapad if "hyprgrass" in " ".join(argv)])
 
     def test_every_plugin_fork_is_synced_from_upstream(self) -> None:
         # A fork that stops receiving upstream's commit pins builds the wrong
         # source after the next Hyprland update.
         forks = set(re.findall(r'"https://github\.com/(lukastk/[\w-]+)"', (ROOT / "install.py").read_text()))
-        self.assertEqual({"lukastk/hyprexpo", "lukastk/hyprgrass"}, forks)
+        self.assertEqual({"lukastk/hyprgrass"}, forks)
         workflow = (ROOT / ".github/workflows/sync-plugin-forks.yml").read_text()
         for fork in forks:
             self.assertIn(f"repo: {fork}\n", workflow)

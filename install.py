@@ -388,16 +388,16 @@ def configure_plugins(profile: dict, environment: dict[str, str] | None) -> None
     if environment is None:
         print("myarch: no running Hyprland instance; runtime plugin build is deferred", file=sys.stderr)
         return
-    # Both plugins come from lukastk forks carrying one hyprpm.toml commit on
-    # top of upstream. hyprpm reads the plugin list from HEAD's manifest and
-    # then builds the commit pinned for the running Hyprland, so a fork must
-    # carry upstream's newest pins: .github/workflows/sync-plugin-forks.yml
-    # merges upstream daily and fails loudly on a conflict. Why each fork
-    # exists, and when to drop it, is in docs/plugin-forks.md.
-    # TODO(cleanup): drop the lukastk/hyprexpo fork (install.py URL back to sandwichfarm/hyprexpo, its .github/workflows/sync-plugin-forks.yml entry, its docs/plugin-forks.md section, then archive the fork) — once upstream's pin for the running Hyprland contains sandwichfarm/hyprexpo#137.
-    plugins = [("https://github.com/lukastk/hyprexpo", "hyprexpo")]
+    # hyprexpo comes from upstream. hyprgrass comes from a lukastk fork carrying
+    # one pocket4 branch on top of upstream; hyprpm reads the plugin list from
+    # HEAD's manifest and then builds the commit pinned for the running
+    # Hyprland, so the fork must carry upstream's newest pins:
+    # .github/workflows/sync-plugin-forks.yml merges upstream daily and fails
+    # loudly on a conflict. Why the fork exists, and when to drop it, is in
+    # docs/plugin-forks.md.
+    plugins = [("https://github.com/sandwichfarm/hyprexpo", "hyprexpo")]
     if profile["plugins"]["hyprgrass"]:
-        # TODO(cleanup): drop the lukastk/hyprgrass fork (install.py URL back to horriblename/hyprgrass, its .github/workflows/sync-plugin-forks.yml entry, its docs/plugin-forks.md section, then archive the fork) — once upstream's hyprpm.toml no longer lists hyprgrass-pulse or hyprgrass-backlight AND upstream has the touch-down refocus fix and a pointer_emulation_mods equivalent (checks in docs/plugin-forks.md).
+        # TODO(cleanup): drop the lukastk/hyprgrass fork (install.py URL back to horriblename/hyprgrass, its .github/workflows/sync-plugin-forks.yml entry, its docs/plugin-forks.md section, then archive the fork) — once upstream has a pointer_emulation_mods equivalent (check in docs/plugin-forks.md).
         plugins.append(("https://github.com/lukastk/hyprgrass", "hyprgrass"))
     # hyprpm identifies a repository as author/name, taking the author from its
     # URL. One installed from another author's URL is removed BEFORE updating:
