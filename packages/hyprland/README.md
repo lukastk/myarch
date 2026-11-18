@@ -1,7 +1,7 @@
 # Patched Hyprland for pocket4 touch selection
 
-Arch's `hyprland` 0.56.2-3 with one patch, `touch-synthetic-pointer.patch`, built
-as `0.56.2-3.2`. pocket4 lists it in `profiles/pocket4.toml` `[packages] patched`, so
+Arch's `hyprland` 0.57.2-1 with one patch, `touch-synthetic-pointer.patch`, built
+as `0.57.2-1.1`. pocket4 lists it in `profiles/pocket4.toml` `[packages] patched`, so
 `install.sh` builds and installs it (`packages/install-patched hyprland`); ideapad
 keeps the stock package.
 
@@ -63,19 +63,19 @@ is still pending. Never log password keycodes to diagnose focus.
 `install.sh --profile pocket4` does it: `packages/install-patched hyprland` copies
 this directory to `~/.cache/myarch/packages/hyprland`, runs
 `makepkg --syncdeps --cleanbuild --clean` (the build tree, ~3 GB, is removed afterwards), and `pacman -U`s the `hyprland` package (not
-`hyprpm` or `-debug`). It skips the build when `0.56.2-3.2` is already installed, so
-**bump the suffix (e.g. 3.2 -> 3.3) whenever the patch changes.** Rebuild the
+`hyprpm` or `-debug`). It skips the build when `0.57.2-1.1` is already installed, so
+**bump the suffix (e.g. 1.1 -> 1.2) whenever the patch changes.** Rebuild the
 hyprpm plugins after the compositor update (`hyprpm update -f`), and restart
 Hyprland for the new compositor and plugin builds to take effect. Coordinate
-that restart: it closes the running desktop apps. The 3.2 change keeps the same
-upstream commit and library ABI; no plugin pin rebase is needed.
+that restart: it closes the running desktop apps. A suffix bump that keeps the same
+upstream commit and library ABI needs no plugin pin rebase; a move to a new Hyprland release (0.56.2 -> 0.57.2 on 2026-11-18, which only re-applied the patch, now `1.1`) does.
 
 ## When Arch updates Hyprland
 
 A system upgrade (`pacman -Syu`) replaces this build with Arch's newer one, and
 handle drags break again. The next `install.sh` run then stops, because
-install-patched refuses to build 0.56.2 once the repositories carry anything but
-0.56.2-3. To fix it:
+install-patched refuses to build 0.57.2 once the repositories carry anything but
+0.57.2-1. To fix it:
 
 1. Check whether upstream already has an equivalent guard in
    `CInputManager::simulateMouseMovement`. If so, delete this directory and the
